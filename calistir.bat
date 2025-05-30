@@ -1,16 +1,16 @@
 @echo off
 
-echo Java surumu kontrol ediliyor...
+echo Checking Java version...
 java -version
 
 echo.
-echo Proje ana dizini kontrol ediliyor...
+echo Checking project root directory...
 cd /D "%~dp0"
 
 echo.
-echo API Anahtari .env dosyasindan okunuyor...
+echo Reading API Key from .env file...
 IF NOT EXIST .env (
-    echo HATA: .env dosyasi bulunamadi. Lutfen FINNHUB_API_KEY iceren bir .env dosyasi olusturun.
+    echo ERROR: .env file not found. Please create an .env file containing FINNHUB_API_KEY.
     goto end
 )
 
@@ -19,43 +19,43 @@ FOR /F "tokens=1,* delims==" %%A IN (.env) DO (
 )
 
 IF NOT DEFINED FINNHUB_API_KEY (
-    echo HATA: FINNHUB_API_KEY, .env dosyasinda bulunamadi veya degeri bos.
+    echo ERROR: FINNHUB_API_KEY not found in .env file or its value is empty.
     goto end
 )
 
-echo API Anahtari bulundu ve ayarlandi (bu oturum icin).
+echo API Key found and set (for this session).
 REM echo DEBUG: FINNHUB_API_KEY = %FINNHUB_API_KEY%
 
 echo.
-echo "bin" klasoru olusturuluyor (eger yoksa)...
+echo Creating "bin" folder (if it does not exist)...
 mkdir bin 2>nul
 
 echo.
-echo Proje derleniyor...
-echo src ve lib klasorlerinin mevcut oldugundan ve JAR dosyalarinin adlarinin dogru oldugundan emin olun.
-REM lib klasorundeki JAR dosyalarinin adlarini ve surumlerini kontrol edin ve gerekiyorsa guncelleyin.
-REM Ornegin, xchart-3.8.8.jar ve json-20250517.jar kullanildigi varsayilmistir.
+echo Compiling project...
+echo Ensure that src and lib folders exist and JAR file names are correct.
+REM Check the names and versions of JAR files in the lib folder and update if necessary.
+REM For example, it is assumed that xchart-3.8.8.jar and json-20250517.jar are used.
 javac -d bin -cp "src/main/java;lib/xchart-3.8.8.jar;lib/json-20250517.jar" src/main/java/com/stockmonitor/*.java src/main/java/com/stockmonitor/listeners/*.java
 
 IF ERRORLEVEL 1 (
     echo.
-    echo !!! DERLEME BASARISIZ OLDU !!!
-    echo Lutfen yukaridaki hatalari kontrol edin.
-    echo Java PATH'inizin dogru ayarlandigindan ve lib klasorundeki JAR dosyalarinin adlarinin betiktekiyle eslestiginden emin olun.
+    echo !!! COMPILATION FAILED !!!
+    echo Please check the errors above.
+    echo Ensure your Java PATH is set correctly and JAR file names in the lib folder match those in the script.
     goto end
 )
 
 echo.
-echo Derleme basarili.
+echo Compilation successful.
 echo.
-echo Uygulama baslatiliyor...
-echo Konsol cikislari icin bu pencereyi acik tutun.
+echo Starting application...
+echo Keep this window open for console outputs.
 echo.
-REM lib klasorundeki JAR dosyalarinin adlarini ve surumlerini kontrol edin ve gerekiyorsa guncelleyin.
+REM Check the names and versions of JAR files in the lib folder and update if necessary.
 java -cp ".;bin;lib/xchart-3.8.8.jar;lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
 
 :end
 echo.
-echo Betik tamamlandi.
-REM Konsolun hemen kapanmamasi icin istege bagli olarak asagidaki satiri aktiflestirebilirsiniz.
+echo Script finished.
+REM Optionally, you can uncomment the line below to prevent the console from closing immediately.
 REM pause 

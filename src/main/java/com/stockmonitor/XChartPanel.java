@@ -19,29 +19,30 @@ public class XChartPanel extends JPanel {
     private String seriesName; 
     private String initialPanelTitle;
 
-    private OHLCChart chart; // Artık her zaman OHLCChart
+    private OHLCChart chart; // Always OHLCChart now
     private org.knowm.xchart.XChartPanel<OHLCChart> chartComponentPanel; 
 
-    // Mum Grafik için veri listeleri
+    // Data lists for Candle Chart
     private final List<Date> xDataCandle;
     private final List<Double> openDataCandle;
     private final List<Double> highDataCandle;
     private final List<Double> lowDataCandle;
     private final List<Double> closeDataCandle;
 
-    // MAX_DATA_POINTS_CANDLE, son 1 saatlik 1dk'lık mumları (60 adet) + anlık akacak verileri (örn. 60 adet daha) alacak şekilde ayarlandı
+    // MAX_DATA_POINTS_CANDLE is set to accommodate 1-minute candles for the last hour (60) + incoming live data (e.g., 60 more)
     private static final int MAX_DATA_POINTS_CANDLE = 300; 
 
-    // Y Ekseni Dinamik Aralık Ayarları için Yeni Sabitler
-    private static final double MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE = 0.001; // %2.5'ten %0.1'e düşürüldü (0.025 -> 0.001)
-    private static final double ABSOLUTE_MIN_Y_AXIS_SPAN = 0.01; // 0.1'den 0.01'e düşürüldü
-    private static final double Y_AXIS_PADDING_PERCENTAGE_OF_EFFECTIVE_RANGE = 0.10; // %15'ten %10'a düşürüldü (0.15 -> 0.10)
+    // New Constants for Y-Axis Dynamic Range Settings
+    private static final double MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE = 0.001; // Reduced from 2.5% to 0.1% (0.025 -> 0.001)
+    private static final double ABSOLUTE_MIN_Y_AXIS_SPAN = 0.01; // Reduced from 0.1 to 0.01
+    private static final double Y_AXIS_PADDING_PERCENTAGE_OF_EFFECTIVE_RANGE = 0.10; // Reduced from 15% to 10% (0.15 -> 0.10)
 
     private boolean seriesExists = false;
 
     public XChartPanel(String initialTitle) {
         this.initialPanelTitle = initialTitle;
         this.seriesName = initialTitle; 
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Instance created with initial title: " + initialTitle);
         
         this.xDataCandle = new CopyOnWriteArrayList<>();
         this.openDataCandle = new CopyOnWriteArrayList<>();
@@ -54,17 +55,18 @@ public class XChartPanel extends JPanel {
     }
 
     private void initOHLCChart() {
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] initOHLCChart called for: " + (this.seriesName != null ? this.seriesName : this.initialPanelTitle));
         chart = new OHLCChartBuilder()
-                // .width(350).height(250) // Sabit boyutlar kaldırıldı, layout manager'a güvenilecek
+                // .width(350).height(250) // Fixed sizes removed, will rely on layout manager
                 .title(this.seriesName != null && !this.seriesName.equals(this.initialPanelTitle) ? this.seriesName : this.initialPanelTitle)
-                .xAxisTitle("Zaman").yAxisTitle("Fiyat").build();
+                .xAxisTitle("Time").yAxisTitle("Price").build();
 
         AxesChartStyler styler = chart.getStyler();
         commonStylerSettings(styler);
         styler.setDatePattern("HH:mm:ss");
         styler.setYAxisDecimalPattern("#,##0.0000");
-        // Mum renkleri için özel ayarlar (isteğe bağlı)
-        styler.setToolTipsEnabled(true); // İpuçlarını etkinleştir
+        // Custom settings for candle colors (optional)
+        styler.setToolTipsEnabled(true); // Enable tooltips
         styler.setLegendVisible(false); 
     }
 
@@ -85,6 +87,7 @@ public class XChartPanel extends JPanel {
     }
     
     private void setupChartComponent() {
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] setupChartComponent called for: " + this.initialPanelTitle);
         if (chartComponentPanel != null) {
             remove(chartComponentPanel); 
         }
@@ -98,6 +101,7 @@ public class XChartPanel extends JPanel {
 
     public void setSeriesNameAndTitle(String newSeriesName) {
         this.seriesName = (newSeriesName != null && !newSeriesName.trim().isEmpty()) ? newSeriesName : this.initialPanelTitle;
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] setSeriesNameAndTitle called. New series name: " + this.seriesName + " (Panel: " + this.initialPanelTitle + ")");
         if (chart != null) {
             chart.setTitle(this.seriesName);
             if (chartComponentPanel != null) {
@@ -107,6 +111,7 @@ public class XChartPanel extends JPanel {
     }
     
     private void clearLocalData(){
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] clearLocalData called for: " + this.initialPanelTitle);
         xDataCandle.clear();
         openDataCandle.clear();
         highDataCandle.clear();
@@ -116,11 +121,12 @@ public class XChartPanel extends JPanel {
     }
 
     public void addOHLCDataPoint(Date timestamp, double open, double high, double low, double close) {
+        // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] addOHLCDataPoint called for: " + this.seriesName);
         if (this.seriesName == null || this.seriesName.equals(this.initialPanelTitle)) {
-             // System.err.println("XChartPanel: Seri adı atanmamış, OHLC verisi eklenemiyor: " + this.initialPanelTitle);
-            return; // Seri adı atanana kadar veri ekleme
+            // System.err.println("[XChartPanel] Series name not assigned, cannot add OHLC data for: " + this.initialPanelTitle);
+            return; // Do not add data until series name is assigned
         }
-        synchronized (xDataCandle) { // Veri listelerine erişimi senkronize et
+        synchronized (xDataCandle) { // Synchronize access to data lists
             xDataCandle.add(timestamp);
             openDataCandle.add(open);
             highDataCandle.add(high);
@@ -134,6 +140,7 @@ public class XChartPanel extends JPanel {
                 lowDataCandle.remove(0);
                 closeDataCandle.remove(0);
             }
+            // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Data point added for " + this.seriesName + ". Total points: " + xDataCandle.size());
             updateOHLCChartSeries();
         }
     }
@@ -144,12 +151,15 @@ public class XChartPanel extends JPanel {
         final List<Double> highCopy = new ArrayList<>(highDataCandle);
         final List<Double> lowCopy = new ArrayList<>(lowDataCandle);
         final List<Double> closeCopy = new ArrayList<>(closeDataCandle);
+        // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Scheduling updateOHLCChartSeries for " + this.seriesName + " on EDT. Data points: " + xCopy.size());
 
         javax.swing.SwingUtilities.invokeLater(() -> {
+            // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] updateOHLCChartSeries (EDT) running for: " + this.seriesName);
             try {
                 if (xCopy.isEmpty()) {
-                    // Eğer veri yoksa ve seri varsa seriyi temizle/kaldır
+                    // If no data and series exists, clear/remove series
                     if(seriesExists && chart.getSeriesMap().containsKey(this.seriesName)){
+                        // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Removing existing series " + this.seriesName + " due to empty data.");
                         chart.removeSeries(this.seriesName);
                         seriesExists = false;
                     }
@@ -159,20 +169,22 @@ public class XChartPanel extends JPanel {
                 }
 
                 if (!seriesExists || !chart.getSeriesMap().containsKey(this.seriesName)) {
-                    if (chart.getSeriesMap().containsKey(this.seriesName)) chart.removeSeries(this.seriesName);
+                    if (chart.getSeriesMap().containsKey(this.seriesName)) chart.removeSeries(this.seriesName); // Should not happen if !seriesExists
+                    // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Adding new OHLC series: " + this.seriesName);
                     OHLCSeries series = chart.addSeries(this.seriesName, xCopy, openCopy, highCopy, lowCopy, closeCopy);
-                    // Mum renklerini burada ayarlayabilirsiniz (isteğe bağlı)
+                    // You can set candle colors here (optional)
                     // series.setUpColor(XChartSeriesColors.GREEN); 
                     // series.setDownColor(XChartSeriesColors.RED);
                     seriesExists = true;
                 } else {
+                    // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Updating existing OHLC series: " + this.seriesName);
                     chart.updateOHLCSeries(this.seriesName, xCopy, openCopy, highCopy, lowCopy, closeCopy, null);
                 }
                 applyYAxisPadding(highCopy, lowCopy, (AxesChartStyler) chart.getStyler());
                 if (chartComponentPanel != null) chartComponentPanel.repaint();
             } catch (Exception e) { 
-                seriesExists = false; // Hata durumunda seriyi tekrar oluşturmaya çalışır
-                System.err.println("Hata (updateOHLCChartSeries - " + this.seriesName + "): " + e.getMessage());
+                seriesExists = false; // Try to recreate series in case of error
+                System.err.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Error in updateOHLCChartSeries for " + this.seriesName + ": " + e.getMessage());
                 // e.printStackTrace();
             }
         });
@@ -193,17 +205,17 @@ public class XChartPanel extends JPanel {
             double actualMaxVal = maxOptional.getAsDouble();
             double dataRange = actualMaxVal - actualMinVal;
             double midPrice = (actualMinVal + actualMaxVal) / 2.0;
-            if (Double.isNaN(midPrice) || Double.isInfinite(midPrice)) midPrice = 0; // NaN veya Sonsuz ise sıfır ata
+            if (Double.isNaN(midPrice) || Double.isInfinite(midPrice)) midPrice = 0; // Assign zero if NaN or Infinite
 
             double minDisplaySpan;
-            if (Math.abs(midPrice) < 0.00001) { // Midprice çok küçük veya sıfırsa
+            if (Math.abs(midPrice) < 0.00001) { // If midPrice is very small or zero
                 minDisplaySpan = ABSOLUTE_MIN_Y_AXIS_SPAN;
             } else {
                 minDisplaySpan = Math.max(Math.abs(midPrice) * MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE, ABSOLUTE_MIN_Y_AXIS_SPAN);
             }
             
             double effectiveRange = Math.max(dataRange, minDisplaySpan);
-            if (effectiveRange < 0.00001) effectiveRange = minDisplaySpan; // dataRange çok küçükse minDisplaySpan kullan
+            if (effectiveRange < 0.00001) effectiveRange = minDisplaySpan; // Use minDisplaySpan if dataRange is too small
 
             double displayMin = midPrice - (effectiveRange / 2.0);
             double displayMax = midPrice + (effectiveRange / 2.0);
@@ -213,24 +225,28 @@ public class XChartPanel extends JPanel {
             styler.setYAxisMin(displayMin - padding);
             styler.setYAxisMax(displayMax + padding);
 
-        } else { // Bu durum listeler boş değilse oluşmamalı, yedek olarak kalıyor
+        } else { // This should not happen if lists are not empty, kept as a fallback
             styler.setYAxisMin(-1.0);
             styler.setYAxisMax(1.0);
         }
     }
 
     public void clearChart() {
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] clearChart called for: " + this.initialPanelTitle + ", current series: " + this.seriesName);
         clearLocalData();
         if (chart != null) {
             if (seriesExists && seriesName != null && !seriesName.equals(initialPanelTitle) && chart.getSeriesMap().containsKey(seriesName)) {
-                 try { chart.removeSeries(seriesName); } catch (Exception e) { /* Hata yoksayılabilir */ }
+                 try { 
+                     // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Removing series: " + seriesName + " from chart.");
+                     chart.removeSeries(seriesName); 
+                 } catch (Exception e) { /* Ignore error */ }
             }
         }
         seriesExists = false;
-        // Panelin başlığını ilk haline döndürmek için setSeriesNameAndTitle'ı MainController'dan çağırın.
-        // setPanelTitle(this.initialPanelTitle); // Bu doğrudan çağrı yerine MainController yönetsin
+        // Call setSeriesNameAndTitle from MainController to reset panel title to initial.
+        // setPanelTitle(this.initialPanelTitle); // Let MainController manage this instead of direct call
         
-        if (chart != null && chart.getStyler() instanceof AxesChartStyler) { // Styler tipini kontrol et
+        if (chart != null && chart.getStyler() instanceof AxesChartStyler) { // Check styler type
             applyYAxisPadding(new ArrayList<>(), new ArrayList<>(), (AxesChartStyler) chart.getStyler());
         }
 
@@ -240,16 +256,27 @@ public class XChartPanel extends JPanel {
         }
     }
 
-    // Panelin başlığını güncellemek için (MainController tarafından çağrılır)
+    // To update panel title (called by MainController)
     public void setPanelTitle(String title) {
-        // Bu metot setSeriesNameAndTitle ile birleştirilebilir veya onun tarafından çağrılabilir.
-        // Şimdilik doğrudan chart.setTitle kullanıyoruz, ama seri adını da güncellemek önemli.
+        // This method could be merged with or called by setSeriesNameAndTitle.
+        // For now, we use chart.setTitle directly, but updating seriesName is also important.
+        String oldSeriesName = this.seriesName;
         this.seriesName = (title != null && !title.trim().isEmpty()) ? title : this.initialPanelTitle;
+        System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] setPanelTitle called for: " + this.initialPanelTitle + ". New title/series name: " + this.seriesName);
         if (chart != null) {
             chart.setTitle(this.seriesName);
-            // Eğer seri adı değişiyorsa ve seri varsa, serinin adını da güncellemek gerekebilir.
-            // XChart'ta var olan bir serinin adını değiştirmek doğrudan desteklenmiyor olabilir.
-            // Genellikle seriyi kaldırıp yeni adla eklemek gerekir. updateOHLCChartSeries bunu yönetiyor.
+            // If series name changes and series exists with old name, it might need to be renamed or re-added.
+            // This is complex because chart.updateSeriesName might not exist.
+            // For now, clearing and re-adding is handled by updateOHLCChartSeries logic when seriesName changes.
+            if (seriesExists && oldSeriesName != null && !oldSeriesName.equals(this.seriesName) && chart.getSeriesMap().containsKey(oldSeriesName)){
+                try {
+                    // System.out.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Title changed, removing old series: " + oldSeriesName);
+                    chart.removeSeries(oldSeriesName);
+                    seriesExists = false; // Force re-creation with new name on next data point
+                } catch (Exception e) {
+                     System.err.println("[XChartPanel] [Thread: " + Thread.currentThread().getName() + "] Error removing old series " + oldSeriesName + " after title change: " + e.getMessage());
+                }
+            }
             if (chartComponentPanel != null) {
                 chartComponentPanel.repaint();
             }

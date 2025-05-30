@@ -1,45 +1,47 @@
 package com.stockmonitor.listeners;
 
 import java.util.Date;
+// import java.util.List; // For onCandleDataUpdate, if re-enabled
+// import com.stockmonitor.CandleData; // For onCandleDataUpdate, if re-enabled
 
 /**
- * Arayüz, grafik verileri güncellendiğinde çağrılacak metotları tanımlar.
- * Bu, genellikle anlık fiyat verilerinin grafiğe eklenmesi için kullanılır.
+ * Interface defining methods to be called when graph data is updated.
+ * This is typically used for adding live price data to a graph.
  */
 public interface GraphDataListener {
 
     /**
-     * Belirli bir hisse senedi için yeni bir fiyat noktası geldiğinde çağrılır.
+     * Called when a new price point arrives for a specific stock.
      *
-     * @param symbol Hisse senedi sembolü (örn: "AAPL").
-     * @param price Alınan son fiyat.
-     * @param timestamp Fiyatın alındığı zaman damgası.
+     * @param symbol The stock symbol (e.g., "AAPL").
+     * @param price The latest price received.
+     * @param timestamp The timestamp when the price was received.
      */
     void onPriceUpdate(String symbol, double price, Date timestamp);
 
     /**
-     * OHLC (Açılış, Yüksek, Düşük, Kapanış) verisi güncellendiğinde çağrılır (mum grafikler için).
-     * @param symbol Sembol.
-     * @param timestamp Zaman damgası (genellikle günün veya periyodun başlangıcı).
-     * @param open Açılış fiyatı.
-     * @param high En yüksek fiyat.
-     * @param low En düşük fiyat.
-     * @param close Kapanış fiyatı.
+     * Called when OHLC (Open, High, Low, Close) data is updated (for candlestick charts).
+     * @param symbol The symbol.
+     * @param timestamp The timestamp (usually the start of the day or period).
+     * @param open The opening price.
+     * @param high The highest price.
+     * @param low The lowest price.
+     * @param close The closing price.
      */
     void onOHLCDataUpdate(String symbol, Date timestamp, double open, double high, double low, double close);
 
     /**
-     * Belirli bir hisse senedine ait grafiği temizlemek için çağrılır.
-     * Bu, genellikle izleme durdurulduğunda veya sembol değiştirildiğinde kullanılır.
-     * @param symbol Temizlenecek grafiğin hisse senedi sembolü.
+     * Called to clear the graph for a specific stock.
+     * This is typically used when monitoring is stopped or the symbol is changed.
+     * @param symbol The stock symbol of the graph to be cleared.
      */
     void clearGraph(String symbol);
 
     /**
-     * İzlenen tüm grafiklerin temizlenmesi için çağrılır.
+     * Called to clear all monitored graphs.
      */
     void clearAllGraphs();
 
-    // Mum grafiği verileri için bir metot eklenebilir, ancak şimdilik anlık fiyatla devam ediyoruz.
+    // A method for candle chart data could be added, but for now, we continue with live price.
     // void onCandleDataUpdate(String symbol, List<CandleData> candles);
 }

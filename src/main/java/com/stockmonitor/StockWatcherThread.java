@@ -1,6 +1,6 @@
 package com.stockmonitor;
 
-// import com.stockmonitor.listeners.AlertListener; // Kaldırıldı
+// import com.stockmonitor.listeners.AlertListener; // Removed
 import com.stockmonitor.listeners.GraphDataListener;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -10,44 +10,49 @@ import java.util.concurrent.TimeUnit;
 
 public class StockWatcherThread implements Runnable {
 
-    private final StockConfig stockConfig; // String symbol ve rawThresholdInput yerine StockConfig
+    private final StockConfig stockConfig; // Using StockConfig instead of String symbol and rawThresholdInput
     private final PriceFetcher priceFetcher;
     private final AlertManager alertManager;
     private final GraphDataListener graphDataListener;
-    private final long fetchIntervalSeconds; // Statik olmaktan çıkarıldı, final instance değişkeni oldu
+    private final long fetchIntervalSeconds; // No longer static, now a final instance variable
     private volatile boolean running = true;
-    private double previousClosePrice = -1; // Önceki kapanış fiyatını saklamak için
+    private double previousClosePrice = -1; // To store the previous closing price
     private boolean firstDataPoint = true;
 
-    // Kurucu metot güncellendi, fetchIntervalSeconds parametresi eklendi
+    // Constructor updated, fetchIntervalSeconds parameter added
     public StockWatcherThread(StockConfig stockConfig, 
                               PriceFetcher priceFetcher,
                               AlertManager alertManager,
                               GraphDataListener graphDataListener,
-                              long fetchIntervalSeconds) { // Yeni parametre
+                              long fetchIntervalSeconds) { // New parameter
         this.stockConfig = stockConfig;
         this.priceFetcher = priceFetcher;
         this.alertManager = alertManager;
         this.graphDataListener = graphDataListener;
-        this.fetchIntervalSeconds = fetchIntervalSeconds; // Atama yapıldı
+        this.fetchIntervalSeconds = fetchIntervalSeconds; // Assignment
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Instance created for symbol: " + stockConfig.getSymbol() + " with interval: " + fetchIntervalSeconds + "s");
     }
 
     @Override
     public void run() {
         String symbol = stockConfig.getSymbol();
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] run() started for symbol: " + symbol + ". Interval: " + this.fetchIntervalSeconds + "s.");
         if (symbol == null || symbol.trim().isEmpty()) {
-            System.err.println("StockWatcherThread: İzlenecek sembol belirtilmemiş.");
+            System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Symbol not specified for monitoring: " + symbol);
             return;
         }
-        alertManager.logSystemMessage(symbol + " için " + fetchIntervalSeconds + " saniye aralıklarla izleme başladı.");
+        // Log message moved from MainController to here for more accurate thread info, or keep MainController's log
+        // alertManager.logSystemMessage("Monitoring started for " + symbol + " with " + fetchIntervalSeconds + " seconds interval."); 
 
         while (running) {
             try {
+                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Fetching price..."); // Can be too verbose
                 double currentPrice = priceFetcher.fetchPrice(symbol);
                 Date timestamp = new Date();
+                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Price fetched: " + currentPrice);
 
                 if (currentPrice != -1 && !Double.isNaN(currentPrice)) {
-                    // Anlık fiyattan OHLC verisi türet
+                    // Derive OHLC data from the current price
                     double open, high, low, close;
                     close = currentPrice;
 
@@ -62,39 +67,43 @@ public class StockWatcherThread implements Runnable {
                         low = Math.min(open, currentPrice);
                     }
                     
+                    // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sending OHLC data to listener.");
                     graphDataListener.onOHLCDataUpdate(symbol, timestamp, open, high, low, close);
                     previousClosePrice = currentPrice; 
 
                     checkAlerts(symbol, currentPrice);
                 } else {
-                    // alertManager.logAlert(symbol, "API'den fiyat alınamadı veya geçersiz fiyat.");
-                    alertManager.queueAlert(symbol, "API'den fiyat alınamadı veya geçersiz fiyat.");
+                    // System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Could not fetch price or invalid price from API.");
+                    alertManager.queueAlert(symbol, "Could not fetch price or invalid price from API for " + symbol + ".");
                 }
-
-                TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds); // this.fetchIntervalSeconds kullanıldı
+                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sleeping for " + this.fetchIntervalSeconds + " seconds...");
+                TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds); // Using this.fetchIntervalSeconds
             } catch (InterruptedException e) {
-                running = false;
-                Thread.currentThread().interrupt(); 
-                alertManager.logSystemMessage(symbol + " için izleme kesildi (InterruptedException).");
+                running = false; // Ensure loop termination
+                Thread.currentThread().interrupt(); // Preserve interrupt status
+                System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Monitoring interrupted for " + symbol + ". Thread stopping.");
+                // alertManager.logSystemMessage("Monitoring interrupted by InterruptedException for " + symbol + "."); // AlertManager will log this
             } catch (Exception e) {
-                // alertManager.logAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
-                alertManager.queueAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
+                System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Error while fetching price for " + symbol + ": " + e.getMessage());
+                alertManager.queueAlert(symbol, "Error fetching price for " + symbol + ": " + e.getMessage());
                 try {
-                    TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds * 2); // Hata durumunda bekleme süresi de dinamik intervale göre
+                    TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds * 2); // Wait longer in case of error, based on dynamic interval
                 } catch (InterruptedException ie) {
                     running = false;
                     Thread.currentThread().interrupt();
+                    System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Sleep after error interrupted for " + symbol + ". Thread stopping.");
                 }
             }
         }
-        alertManager.logSystemMessage(symbol + " için izleme durdu.");
-        graphDataListener.clearGraph(symbol); // İzleme durduğunda grafiği temizle
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] run() finished for symbol: " + symbol + ". Cleaning up graph.");
+        // alertManager.logSystemMessage("Monitoring stopped for " + symbol + "."); // AlertManager can handle this or MainController
+        graphDataListener.clearGraph(symbol); // Clear graph when monitoring stops
     }
 
     private void checkAlerts(String symbol, double currentPrice) {
         String thresholdConfig = stockConfig.getThreshold();
         if (thresholdConfig == null || thresholdConfig.trim().isEmpty() || !thresholdConfig.contains("@")) {
-            return; // Eşik yapılandırılmamış veya format hatalı
+            return; // Threshold not configured or format is incorrect
         }
 
         String[] parts = thresholdConfig.split("@", 2);
@@ -103,54 +112,53 @@ public class StockWatcherThread implements Runnable {
         try {
             targetValue = Double.parseDouble(parts[1]);
         } catch (NumberFormatException e) {
-            System.err.println("Hata: " + symbol + " için geçersiz hedef değer formatı: " + parts[1]);
+            System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Error: Invalid target value format for " + symbol + ": " + parts[1]);
             return;
         }
 
         boolean alertTriggered = false;
         String alertMessage = "";
 
-        // Önceki fiyatı da kullanarak kesişme kontrolü için (şimdilik basitçe tutuluyor)
-        // Daha karmaşık kesişme senaryoları için önceki fiyatın da takip edilmesi gerekebilir.
+        // For intersection control using the previous price (kept simple for now)
+        // More complex intersection scenarios might require tracking the previous price.
 
         switch (condition) {
-            case "Fiyat > Değer":
+            case "Fiyat > Değer": // Price > Value
                 if (currentPrice > targetValue) {
                     alertTriggered = true;
-                    alertMessage = String.format("%s fiyatı (%.4f) > hedef (%.4f)", symbol, currentPrice, targetValue);
+                    alertMessage = String.format("%s price (%.4f) > target (%.4f)", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat < Değer":
+            case "Fiyat < Değer": // Price < Value
                 if (currentPrice < targetValue) {
                     alertTriggered = true;
-                    alertMessage = String.format("%s fiyatı (%.4f) < hedef (%.4f)", symbol, currentPrice, targetValue);
+                    alertMessage = String.format("%s price (%.4f) < target (%.4f)", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat Kesişir (Yukarı)": // Basitçe, önceki < hedef && mevcut > hedef
-                // Bu, daha sağlam bir kesişme tespiti için 'previousPrice' gerektirir.
-                // Şimdilik, fiyat hedefin üzerine çıktığında tetiklenecek şekilde basitleştirilmiştir.
-                // Eğer fiyat zaten hedefin üzerindeyse ve bu koşul seçiliyse, her seferinde tetiklenmemesi için ek mantık gerekir.
-                // Şimdilik: Eğer bir önceki değer hedefin altındaysa ve şimdiki değer hedefin üstündeyse (veya eşitse)
+            case "Fiyat Kesişir (Yukarı)": // Price Crosses (Up)
                 if (previousClosePrice != -1 && previousClosePrice < targetValue && currentPrice >= targetValue) {
                     alertTriggered = true;
-                    alertMessage = String.format("%s fiyatı (%.4f) hedefi (%.4f) yukarı yönlü kesti", symbol, currentPrice, targetValue);
+                    alertMessage = String.format("%s price (%.4f) crossed target (%.4f) upwards", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat Kesişir (Aşağı)": // Basitçe, önceki > hedef && mevcut < hedef
+            case "Fiyat Kesişir (Aşağı)": // Price Crosses (Down)
                 if (previousClosePrice != -1 && previousClosePrice > targetValue && currentPrice <= targetValue) {
                     alertTriggered = true;
-                    alertMessage = String.format("%s fiyatı (%.4f) hedefi (%.4f) aşağı yönlü kesti", symbol, currentPrice, targetValue);
+                    alertMessage = String.format("%s price (%.4f) crossed target (%.4f) downwards", symbol, currentPrice, targetValue);
                 }
                 break;
         }
 
         if (alertTriggered) {
+            // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Alert triggered: " + alertMessage);
             alertManager.queueAlert(symbol, alertMessage);
         }
     }
 
     public void stopWatching() {
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] stopWatching() called for symbol: " + getSymbol() + ". Setting running to false.");
         this.running = false;
+        // Thread.currentThread().interrupt(); // Consider if interruption is needed here if sleep is long or blocked on I/O
     }
 
     public String getSymbol() {

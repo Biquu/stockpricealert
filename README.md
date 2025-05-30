@@ -1,133 +1,116 @@
-# Hisse Senedi İzleme Sistemi
+# Stock Monitoring System
 
-Bu proje, Java Swing ve thread'ler kullanılarak geliştirilmiş, seçilen hisse senetlerinin canlı fiyatlarını takip eden, gerçek zamanlı uyarılar veren ve basit bir çizgi grafik ile fiyat değişimlerini görselleştiren bir masaüstü uygulamasıdır.
+This project is a desktop application developed using Java Swing and threads. It tracks live prices of selected stocks, provides real-time alerts, and visualizes price changes with a simple candlestick chart.
 
-## Özellikler
+## Features
 
--   Canlı hisse senedi fiyat takibi (Finnhub API kullanarak)
--   Kullanıcı tanımlı fiyat eşikleri aşıldığında görsel ve sesli uyarılar
--   Seçilen hisse senedi için anlık fiyat değişimlerini gösteren çizgi grafik (XChart ile)
--   Aynı anda birden fazla hisse senedini izleyebilme (her biri ayrı bir thread'de)
--   API veya simüle edilmiş CSV verisi (henüz tam olarak entegre edilmedi) arasında seçim yapabilme (temel altyapı mevcut)
--   Nimbus Look and Feel ile geliştirilmiş kullanıcı arayüzü
+-   Live stock price tracking (using Finnhub API)
+-   Visual and audible alerts when user-defined price thresholds are breached
+-   Candlestick chart displaying real-time price changes for the selected stock (with XChart)
+-   Ability to monitor multiple stocks simultaneously (each in a separate thread)
+-   Improved UI with Nimbus Look and Feel
 
-## Başlarken
+## Getting Started
 
-Bu talimatlar, projenin bir kopyasını geliştirme ve test amacıyla yerel makinenizde çalıştırmanıza yardımcı olacaktır.
+These instructions will help you get a copy of the project up and running on your local machine for development and testing purposes.
 
-### Önkoşullar
+### Prerequisites
 
-Yazılımı yüklemek için nelere ihtiyacınız olduğu ve bunların nasıl kurulacağı:
+What you need to install the software and how to install them:
 
--   Java Development Kit (JDK) 11 veya üzeri
--   `lib` klasöründe bulunması gereken JAR dosyaları:
-    -   XChart: `xchart-3.8.8.jar` (veya daha güncel bir sürüm)
-    -   org.json: `json-20231013.jar` (veya daha güncel bir sürüm)
-    -   Bu JAR dosyalarını Maven Central veya XChart'ın GitHub sayfasından indirebilirsiniz.
--   Finnhub API Anahtarı: Finnhub.io web sitesinden ücretsiz bir API anahtarı almanız gerekmektedir.
+-   Java Development Kit (JDK) 11 or later
+-   JAR files required in the `lib` folder:
+    -   XChart: `xchart-3.8.8.jar` (or a more recent version)
+    -   org.json: `json-20250517.jar` (or a more recent version, check `calistir.bat` for the exact version used)
+    -   You can download these JAR files from Maven Central or XChart's GitHub page.
+-   Finnhub API Key: You will need to obtain a free API key from the [Finnhub.io](https://finnhub.io/) website.
 
-### Kurulum
+### Setup
 
-Geliştirme ortamını çalıştırmak için adım adım bir dizi örnek:
+A step-by-step series of examples that tell you how to get a development environment running:
 
-1.  Projeyi klonlayın (eğer bir Git deposu kullanılıyorsa) veya proje dosyalarını bir klasöre indirin.
+1.  Clone the project (if using a Git repository) or download the project files into a folder.
     ```bash
-    # Örnek: git clone https://github.com/kullanici_adiniz/hisse_senedi_izleme.git
+    # Example: git clone https://github.com/your_username/stock_monitoring.git
     ```
-2.  Proje dizinine gidin.
+2.  Navigate to the project directory.
     ```bash
-    # Örnek: cd hisse_senedi_izleme
+    # Example: cd stock_monitoring
     ```
-3.  `lib` adında bir klasör oluşturun (eğer yoksa) ve gerekli JAR dosyalarını (`xchart-*.jar`, `json-*.jar`) bu klasöre kopyalayın.
-4.  API Anahtarınızı ayarlayın:
-    -   Proje ana dizininde `.env` adında bir dosya oluşturun.
-    -   `.env` dosyasının içeriği tam olarak aşağıdaki gibi olmalıdır (yalnızca `SENIN_API_ANAHTARIN_BURAYA` kısmını kendi Finnhub API anahtarınızla değiştirin):
+3.  Create a folder named `lib` (if it doesn't exist) and copy the required JAR files (`xchart-*.jar`, `json-*.jar`) into this folder.
+4.  Set up your API Key:
+    -   Create a file named `.env` in the project's root directory.
+    -   The content of the `.env` file should be exactly as follows (replace `YOUR_API_KEY_HERE` with your actual Finnhub API key):
         ```env
-        FINNHUB_API_KEY=SENIN_API_ANAHTARIN_BURAYA
+        FINNHUB_API_KEY=YOUR_API_KEY_HERE
         ```
-    -   **ÖNEMLİ:** `.env` dosyasını asla Git gibi sürüm kontrol sistemlerine göndermeyin. `.gitignore` dosyanızda `.env` satırının olduğundan emin olun.
-    -   Eğer IDE'niz veya sisteminiz `.env` dosyalarını otomatik olarak yüklemiyorsa, uygulamayı çalıştırırken bu ortam değişkeninin Java sürecine aktarıldığından emin olmanız gerekebilir. Çoğu modern IDE (IntelliJ IDEA, VS Code vb.) `.env` dosyalarını otomatik olarak tanır veya eklentiler aracılığıyla destekler.
+    -   **IMPORTANT:** Never commit the `.env` file to version control systems like Git. Ensure that your `.gitignore` file contains the line `.env`.
+    -   If your IDE or system does not automatically load `.env` files, you might need to ensure this environment variable is passed to the Java process when running the application. Most modern IDEs (IntelliJ IDEA, VS Code, etc.) recognize `.env` files automatically or support them via plugins.
 
-## Kullanım
+## Usage
 
-Uygulamayı derlemek ve çalıştırmak için:
+To compile and run the application:
 
-**Yöntem 1: `calistir.bat` Betiği ile (Windows için Önerilen)**
+**Method 1: Using `calistir.bat` Script (Recommended for Windows)**
 
-Proje ana dizininde bulunan `calistir.bat` dosyasına çift tıklayarak uygulamayı kolayca derleyebilir ve çalıştırabilirsiniz.
+You can easily compile and run the application by double-clicking the `calistir.bat` file located in the project's root directory.
 
-Bu betik aşağıdaki adımları otomatik olarak gerçekleştirir:
-1.  `bin` klasörünü oluşturur (eğer yoksa).
-2.  Gerekli Java kaynak dosyalarını derler. `lib` klasöründeki `xchart-3.8.8.jar` ve `json-20250517.jar` dosyalarının var olduğunu varsayar. Eğer JAR dosyalarınızın adları veya sürümleri farklıysa, `calistir.bat` dosyasını bir metin editörü ile açıp ilgili yerleri düzenlemeniz gerekebilir.
-3.  Uygulamayı başlatır.
+This script automatically performs the following steps:
+1.  Creates a `bin` folder (if it doesn't exist).
+2.  Compiles the necessary Java source files. It assumes that `xchart-3.8.8.jar` and `json-20250517.jar` are present in the `lib` folder. If your JAR file names or versions differ, you may need to open `calistir.bat` with a text editor and adjust the relevant paths.
+3.  Starts the application.
 
-Derleme veya çalıştırma sırasında bir sorun olursa, komut istemi penceresinde hata mesajlarını görebilirsiniz.
+If there are any issues during compilation or execution, you will see error messages in the command prompt window.
 
-**Yöntem 2: Manuel Komutlarla**
+**Method 2: Manual Commands**
 
-1.  Proje ana dizininde bir `bin` klasörü oluşturun (derlenmiş `.class` dosyaları için).
+1.  Create a `bin` folder in the project root directory (for compiled `.class` files).
     ```bash
     mkdir bin
     ```
-2.  Java kaynak dosyalarını derleyin. `lib` klasöründeki JAR dosyalarını classpath'e eklediğinizden emin olun. Windows için `;`, Linux/macOS için `:` kullanılır.
+2.  Compile the Java source files. Make sure to add the JAR files from the `lib` folder to your classpath. Use `;` for Windows and `:` for Linux/macOS.
     ```bash
-    # Windows örneği (calistir.bat içeriği ile tutarlı):
+    # Windows example (consistent with calistir.bat):
     javac -d bin -cp "src/main/java;lib/xchart-3.8.8.jar;lib/json-20250517.jar" src/main/java/com/stockmonitor/*.java src/main/java/com/stockmonitor/listeners/*.java
-    # Linux/macOS örneği (JAR adlarını ve yollarını kontrol edin):
+    # Linux/macOS example (check JAR names and paths):
     # javac -d bin -cp "src/main/java:lib/xchart-3.8.8.jar:lib/json-20250517.jar" src/main/java/com/stockmonitor/*.java src/main/java/com/stockmonitor/listeners/*.java
     ```
-    *Not: Yukarıdaki komutlarda JAR dosyalarının tam adlarını kendi indirdiğiniz sürümlerle ve `calistir.bat` içindekiyle eşleşecek şekilde güncelleyin.*
-3.  Uygulamayı çalıştırın:
+    *Note: Update the exact names of the JAR files in the commands above to match the versions you downloaded and those specified in `calistir.bat`.*
+3.  Run the application:
     ```bash
-    # Windows örneği (calistir.bat içeriği ile tutarlı):
-    java -cp "bin;lib/xchart-3.8.8.jar;lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
-    # Linux/macOS örneği (JAR adlarını ve yollarını kontrol edin):
+    # Windows example (consistent with calistir.bat):
+    java -cp ".;bin;lib/xchart-3.8.8.jar;lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
+    # Linux/macOS example (check JAR names and paths):
     # java -cp "bin:lib/xchart-3.8.8.jar:lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
     ```
 
-Uygulama açıldığında, izlemek istediğiniz hisse senedini seçin, alarm için üst ve/veya alt fiyat eşiklerini girin ve "İzlemeyi Başlat" butonuna tıklayın. Alarmlar ve güncel fiyat bilgileri arayüzde gösterilecektir.
+When the application opens, select the stock you want to monitor, enter the upper and/or lower price thresholds for alerts, and click the "Start Monitoring" button. Alerts and current price information will be displayed in the interface.
 
-## Testleri Çalıştırma
+## Running Tests
 
-Şu anda projede otomatize edilmiş bir test sistemi bulunmamaktadır. Testler manuel olarak yapılmaktadır.
+Currently, there is no automated testing system in the project. Tests are performed manually.
 
-### Uçtan Uca Testler
+### End-to-End Tests
 
-- Uygulamanın doğru şekilde başlatılıp başlatılmadığı.
-- Hisse senedi seçimi ve eşik ayarlarının doğru çalışıp çalışmadığı.
-- Fiyatların Finnhub API'sinden doğru şekilde çekilip gösterilip gösterilmediği.
-- Eşikler aşıldığında alarmların tetiklenip tetiklenmediği.
-- Grafiklerin anlık fiyatlarla güncellenip güncellenmediği.
-- "İzlemeyi Durdur" fonksiyonunun beklendiği gibi çalışıp çalışmadığı.
+-   Verify if the application launches correctly.
+-   Check if stock selection and threshold settings work as expected.
+-   Confirm that prices are fetched correctly from the Finnhub API and displayed.
+-   Ensure alerts are triggered when thresholds are breached.
+-   Verify that charts are updated with live prices.
+-   Check if the "Stop Monitoring" functionality works as intended.
 
-## Geliştirildiği Teknolojiler
+## Technologies Used
 
-*   [Java](https://www.oracle.com/java/) - Ana programlama dili
-*   [Java Swing](https://docs.oracle.com/javase/tutorial/uiswing/) - GUI oluşturma kütüphanesi
-*   [Finnhub API](https://finnhub.io/) - Hisse senedi fiyat verileri için kullanılan API
-*   [XChart](https://knowm.org/open-source/xchart/) - Grafik çizimi için kullanılan kütüphane
-*   [org.json](https://github.com/stleary/JSON-java) - JSON verilerini parse etmek için kullanılan kütüphane
+*   [Java](https://www.oracle.com/java/) - Core programming language
+*   [Java Swing](https://docs.oracle.com/javase/tutorial/uiswing/) - GUI creation library
+*   [Finnhub API](https://finnhub.io/) - API used for stock price data
+*   [XChart](https://knowm.org/open-source/xchart/) - Library used for chart plotting
+*   [org.json](https://github.com/stleary/JSON-java) - Library used for parsing JSON data
 
-## Katkıda Bulunma
+## Authors
 
-Katkıda bulunma rehberi için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın (henüz oluşturulmadı).
+*   **Biquu** (GitHub: biquu) - *Initial development and ongoing support*
 
-## Sürümleme
+## License
 
-Sürümleme için [SemVer](http://semver.org/) kullanılmaktadır (henüz resmi bir sürüm yayınlanmadı).
-
-## Yazarlar
-
-*   **AI Assistant (Gemini Pro 2.5)** - *İlk geliştirme ve devam eden destek*
-
-Projenin geliştirilmesine katkıda bulunan diğer kişilerin listesi için [contributors](https://github.com/your_username/your_project_name/contributors) sayfasına bakabilirsiniz (varsa).
-
-## Lisans
-
-Bu proje MIT Lisansı altında lisanslanmıştır - detaylar için [LICENSE.md](LICENSE.md) dosyasına bakın (henüz oluşturulmadı).
-
-## Teşekkürler
-
-*   Finnhub.io ücretsiz API sağladığı için.
-*   XChart ve org.json kütüphanelerinin geliştiricilerine.
-*   Kullanıcının sabrı ve geri bildirimleri için. 
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details (to be created). 
