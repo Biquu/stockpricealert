@@ -8,17 +8,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-// import java.util.ArrayList; // parseCandleData kaldırıldığı için gereksiz olabilir
-// import java.util.List;    // parseCandleData kaldırıldığı için gereksiz olabilir
-// org.json.JSONArray de parseCandleData kaldırıldığı için gereksiz olabilir
 
 public class PriceFetcher {
 
     private static String FINNHUB_API_KEY = System.getenv("FINNHUB_API_KEY");
     private static final String API_URL_TEMPLATE_QUOTE = "https://finnhub.io/api/v1/quote?symbol=%s&token=%s";
-    // private static final String API_URL_TEMPLATE_CANDLE = "https://finnhub.io/api/v1/stock/candle?symbol=%s&resolution=%s&from=%d&to=%d&token=%s"; // Kaldırıldı
-    // private static final String API_URL_TEMPLATE_CRYPTO_CANDLE = "https://finnhub.io/api/v1/crypto/candle?symbol=%s&resolution=%s&from=%d&to=%d&token=%s"; // Kaldırıldı
-    // private static final String SYMBOL_PARAM = "&symbol="; // SYMBOL_PARAM kullanılmıyorsa kaldırılabilir, kontrol edilecek. Kullanılmıyor gibi.
 
     public PriceFetcher() {
         if (FINNHUB_API_KEY == null || FINNHUB_API_KEY.trim().isEmpty()) {
@@ -30,8 +24,6 @@ public class PriceFetcher {
         if (symbol == null || symbol.trim().isEmpty()) {
             throw new IllegalArgumentException("Hisse senedi sembolü boş olamaz.");
         }
-        // API anahtarı constructor'da kontrol edildiği için burada tekrar null check yapmaya gerek yok gibi,
-        // ancak API_KEY null ise String.format hata verecektir. Constructor'daki kontrol bu durumu yakalamalı.
         if (FINNHUB_API_KEY == null || FINNHUB_API_KEY.trim().isEmpty()){
             throw new IOException("Finnhub API anahtarı ayarlanmamış veya boş.");
         }
@@ -96,11 +88,7 @@ public class PriceFetcher {
         }
     }
 
-    
     public static void main(String[] args) {
-        // .env dosyasından FINNHUB_API_KEY'in okunabilmesi için bu testin
-        // ana uygulama bağlamında (örn: IDE veya calistir.bat ile) çalıştırılması gerekebilir.
-        // Doğrudan "Run File" yapılırsa System.getenv("FINNHUB_API_KEY") null dönebilir.
         System.out.println("FINNHUB_API_KEY ortam değişkeni: " + System.getenv("FINNHUB_API_KEY"));
         
         PriceFetcher fetcher = new PriceFetcher();
@@ -116,7 +104,7 @@ public class PriceFetcher {
         String btcSymbol = "BINANCE:BTCUSDT"; 
         String olmayanSymbol = "XYZ123NONEXISTENT";
 
-        System.out.println("\\n--- Test 1: Anlık Fiyat (" + aaplSymbol + ") ---");
+        System.out.println("\n--- Test 1: Anlık Fiyat (" + aaplSymbol + ") ---");
         try {
             double price = fetcher.fetchPrice(aaplSymbol);
             System.out.println(aaplSymbol + " Anlık Fiyat: " + price);
@@ -124,7 +112,7 @@ public class PriceFetcher {
             System.err.println(aaplSymbol + " Anlık Fiyat için HATA: " + e.getMessage());
         }
 
-        System.out.println("\\n--- Test 2: Anlık Fiyat (" + btcSymbol + ") ---");
+        System.out.println("\n--- Test 2: Anlık Fiyat (" + btcSymbol + ") ---");
         try {
             double price = fetcher.fetchPrice(btcSymbol);
             System.out.println(btcSymbol + " Anlık Fiyat: " + price);
@@ -132,7 +120,7 @@ public class PriceFetcher {
             System.err.println(btcSymbol + " Anlık Fiyat için HATA: " + e.getMessage());
         }
         
-        System.out.println("\\n--- Test 3: Anlık Fiyat (Olmayan Sembol: " + olmayanSymbol + ") ---");
+        System.out.println("\n--- Test 3: Anlık Fiyat (Olmayan Sembol: " + olmayanSymbol + ") ---");
         try {
             double price = fetcher.fetchPrice(olmayanSymbol);
             System.out.println(olmayanSymbol + " Anlık Fiyat: " + price);
@@ -140,8 +128,6 @@ public class PriceFetcher {
             System.err.println(olmayanSymbol + " Anlık Fiyat için HATA: " + e.getMessage());
         }
 
-        System.out.println("\\nFinnhub API Anlık Fiyat Testi Tamamlandı.");
+        System.out.println("\nFinnhub API Anlık Fiyat Testi Tamamlandı.");
     }
-    // Mum grafiği verilerini (OHLC) çekmek için metotlar kaldırıldı.
-    // parseCandleData metodu kaldırıldı.
 } 

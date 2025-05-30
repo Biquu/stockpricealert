@@ -18,6 +18,17 @@ public interface GraphDataListener {
     void onPriceUpdate(String symbol, double price, Date timestamp);
 
     /**
+     * OHLC (Açılış, Yüksek, Düşük, Kapanış) verisi güncellendiğinde çağrılır (mum grafikler için).
+     * @param symbol Sembol.
+     * @param timestamp Zaman damgası (genellikle günün veya periyodun başlangıcı).
+     * @param open Açılış fiyatı.
+     * @param high En yüksek fiyat.
+     * @param low En düşük fiyat.
+     * @param close Kapanış fiyatı.
+     */
+    void onOHLCDataUpdate(String symbol, Date timestamp, double open, double high, double low, double close);
+
+    /**
      * Belirli bir hisse senedine ait grafiği temizlemek için çağrılır.
      * Bu, genellikle izleme durdurulduğunda veya sembol değiştirildiğinde kullanılır.
      * @param symbol Temizlenecek grafiğin hisse senedi sembolü.

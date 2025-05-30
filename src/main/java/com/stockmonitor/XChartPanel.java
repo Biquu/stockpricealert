@@ -1,183 +1,255 @@
 package com.stockmonitor;
 
-// import org.knowm.xchart.XChartPanel; // Kendi sınıfımızla çakıştığı için tam adını kullanacağız
-import org.knowm.xchart.XYChart;
-import org.knowm.xchart.XYChartBuilder;
-import org.knowm.xchart.XYSeries;
-import org.knowm.xchart.style.Styler;
+import org.knowm.xchart.OHLCChart;
+import org.knowm.xchart.OHLCChartBuilder;
+import org.knowm.xchart.OHLCSeries;
 import org.knowm.xchart.style.AxesChartStyler;
-import org.knowm.xchart.style.colors.XChartSeriesColors;
-import org.knowm.xchart.style.lines.SeriesLines;
-import org.knowm.xchart.style.markers.SeriesMarkers;
+import org.knowm.xchart.style.Styler;
 
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.BasicStroke; // BasicStroke için import eklendi
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class XChartPanel extends JPanel {
-    private String seriesName; // Dinamik seri adı
-    private XYChart xyChart;
-    private org.knowm.xchart.XChartPanel<XYChart> chartComponentPanel;
-    private final List<Date> xData;
-    private final List<Double> yData;
-    private static final int MAX_DATA_POINTS = 100;
+    private String seriesName; 
+    private String initialPanelTitle;
+
+    private OHLCChart chart; // Artık her zaman OHLCChart
+    private org.knowm.xchart.XChartPanel<OHLCChart> chartComponentPanel; 
+
+    // Mum Grafik için veri listeleri
+    private final List<Date> xDataCandle;
+    private final List<Double> openDataCandle;
+    private final List<Double> highDataCandle;
+    private final List<Double> lowDataCandle;
+    private final List<Double> closeDataCandle;
+
+    // MAX_DATA_POINTS_CANDLE, son 1 saatlik 1dk'lık mumları (60 adet) + anlık akacak verileri (örn. 60 adet daha) alacak şekilde ayarlandı
+    private static final int MAX_DATA_POINTS_CANDLE = 60; 
+
+    // Y Ekseni Dinamik Aralık Ayarları için Yeni Sabitler
+    private static final double MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE = 0.001; // %2.5'ten %0.1'e düşürüldü (0.025 -> 0.001)
+    private static final double ABSOLUTE_MIN_Y_AXIS_SPAN = 0.01; // 0.1'den 0.01'e düşürüldü
+    private static final double Y_AXIS_PADDING_PERCENTAGE_OF_EFFECTIVE_RANGE = 0.10; // %15'ten %10'a düşürüldü (0.15 -> 0.10)
+
     private boolean seriesExists = false;
 
-    public XChartPanel(String initialTitle) { // Başlangıç başlığı alır
-        this.seriesName = initialTitle; // Başlangıçta grafik başlığı için kullanılır, sonra güncellenir
-        this.xData = new CopyOnWriteArrayList<>();
-        this.yData = new CopyOnWriteArrayList<>();
+    public XChartPanel(String initialTitle) {
+        this.initialPanelTitle = initialTitle;
+        this.seriesName = initialTitle; 
+        
+        this.xDataCandle = new CopyOnWriteArrayList<>();
+        this.openDataCandle = new CopyOnWriteArrayList<>();
+        this.highDataCandle = new CopyOnWriteArrayList<>();
+        this.lowDataCandle = new CopyOnWriteArrayList<>();
+        this.closeDataCandle = new CopyOnWriteArrayList<>();
+
         setLayout(new BorderLayout());
-        initChart(initialTitle);
+        setupChartComponent();
     }
 
-    private void initChart(String initialTitle) {
-        xyChart = new XYChartBuilder()
-                .width(300)
-                .height(200)
-                .title(initialTitle) // Başlangıç başlığı
-                .xAxisTitle("Zaman")
-                .yAxisTitle("Fiyat")
-                .build();
+    private void initOHLCChart() {
+        chart = new OHLCChartBuilder()
+                // .width(350).height(250) // Sabit boyutlar kaldırıldı, layout manager'a güvenilecek
+                .title(this.seriesName != null && !this.seriesName.equals(this.initialPanelTitle) ? this.seriesName : this.initialPanelTitle)
+                .xAxisTitle("Zaman").yAxisTitle("Fiyat").build();
 
-        AxesChartStyler styler = xyChart.getStyler();
+        AxesChartStyler styler = chart.getStyler();
+        commonStylerSettings(styler);
+        styler.setDatePattern("HH:mm:ss");
+        styler.setYAxisDecimalPattern("#,##0.0000");
+        // Mum renkleri için özel ayarlar (isteğe bağlı)
+        styler.setToolTipsEnabled(true); // İpuçlarını etkinleştir
+        styler.setLegendVisible(false); 
+    }
+
+    private void commonStylerSettings(AxesChartStyler styler) {
         styler.setPlotBackgroundColor(Color.BLACK);
         styler.setChartBackgroundColor(Color.BLACK);
         styler.setPlotBorderVisible(true);
-        styler.setPlotGridLinesVisible(true);
+        styler.setPlotGridLinesVisible(true); 
         styler.setPlotGridLinesColor(new Color(70, 70, 70));
         styler.setChartFontColor(Color.LIGHT_GRAY);
         styler.setLegendBackgroundColor(Color.DARK_GRAY);
         styler.setLegendBorderColor(Color.GRAY);
         styler.setLegendPosition(Styler.LegendPosition.InsideNW);
-        styler.setXAxisTickLabelsColor(Color.LIGHT_GRAY);
         styler.setXAxisTitleColor(Color.LIGHT_GRAY);
-        styler.setDatePattern("HH:mm:ss");
-        styler.setYAxisTickLabelsColor(Color.LIGHT_GRAY);
         styler.setYAxisTitleColor(Color.LIGHT_GRAY);
-        styler.setYAxisDecimalPattern("#,##0.0000");
-        styler.setSeriesColors(new Color[]{XChartSeriesColors.GREEN}); // Varsayılan seri rengi
-        styler.setSeriesLines(new BasicStroke[]{SeriesLines.SOLID});
-        styler.setSeriesMarkers(new org.knowm.xchart.style.markers.Marker[]{SeriesMarkers.NONE});
-
-        // Seri, ilk veri geldiğinde addDataPoint içinde eklenecek.
-        seriesExists = false;
-
-        chartComponentPanel = new org.knowm.xchart.XChartPanel<>(xyChart);
+        styler.setXAxisTickLabelsColor(Color.LIGHT_GRAY);
+        styler.setYAxisTickLabelsColor(Color.LIGHT_GRAY);
+    }
+    
+    private void setupChartComponent() {
+        if (chartComponentPanel != null) {
+            remove(chartComponentPanel); 
+        }
+        seriesExists = false; 
+        initOHLCChart(); 
+        chartComponentPanel = new org.knowm.xchart.XChartPanel<>(chart); 
         add(chartComponentPanel, BorderLayout.CENTER);
+        revalidate();
+        repaint();
     }
 
-    /**
-     * MainController tarafından çağrılır, grafik başlığını ve veri eklenecek seri adını ayarlar.
-     * @param newSeriesName Ayarlanacak yeni seri adı (genellikle hisse senedi sembolü).
-     */
     public void setSeriesNameAndTitle(String newSeriesName) {
-        this.seriesName = newSeriesName;
-        if (xyChart != null) {
-            xyChart.setTitle(newSeriesName + " Fiyat Grafiği");
+        this.seriesName = (newSeriesName != null && !newSeriesName.trim().isEmpty()) ? newSeriesName : this.initialPanelTitle;
+        if (chart != null) {
+            chart.setTitle(this.seriesName);
             if (chartComponentPanel != null) {
                 chartComponentPanel.repaint();
             }
         }
     }
+    
+    private void clearLocalData(){
+        xDataCandle.clear();
+        openDataCandle.clear();
+        highDataCandle.clear();
+        lowDataCandle.clear();
+        closeDataCandle.clear();
+        seriesExists = false;
+    }
 
-    public void addDataPoint(Date timestamp, double price) {
-        // Seri adı "Hisse X" gibi bir başlangıç değeri ise veya null ise veri ekleme.
-        if (this.seriesName == null || this.seriesName.startsWith("Hisse ")) {
+    public void addOHLCDataPoint(Date timestamp, double open, double high, double low, double close) {
+        if (this.seriesName == null || this.seriesName.equals(this.initialPanelTitle)) {
+             // System.err.println("XChartPanel: Seri adı atanmamış, OHLC verisi eklenemiyor: " + this.initialPanelTitle);
+            return; // Seri adı atanana kadar veri ekleme
+        }
+        synchronized (xDataCandle) { // Veri listelerine erişimi senkronize et
+            xDataCandle.add(timestamp);
+            openDataCandle.add(open);
+            highDataCandle.add(high);
+            lowDataCandle.add(low);
+            closeDataCandle.add(close);
+
+            while (xDataCandle.size() > MAX_DATA_POINTS_CANDLE) {
+                xDataCandle.remove(0);
+                openDataCandle.remove(0);
+                highDataCandle.remove(0);
+                lowDataCandle.remove(0);
+                closeDataCandle.remove(0);
+            }
+            updateOHLCChartSeries();
+        }
+    }
+
+    private void updateOHLCChartSeries() {
+        final List<Date> xCopy = new ArrayList<>(xDataCandle);
+        final List<Double> openCopy = new ArrayList<>(openDataCandle);
+        final List<Double> highCopy = new ArrayList<>(highDataCandle);
+        final List<Double> lowCopy = new ArrayList<>(lowDataCandle);
+        final List<Double> closeCopy = new ArrayList<>(closeDataCandle);
+
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            try {
+                if (xCopy.isEmpty()) {
+                    // Eğer veri yoksa ve seri varsa seriyi temizle/kaldır
+                    if(seriesExists && chart.getSeriesMap().containsKey(this.seriesName)){
+                        chart.removeSeries(this.seriesName);
+                        seriesExists = false;
+                    }
+                    applyYAxisPadding(new ArrayList<>(), new ArrayList<>(), (AxesChartStyler) chart.getStyler());
+                    if (chartComponentPanel != null) chartComponentPanel.repaint();
+                    return;
+                }
+
+                if (!seriesExists || !chart.getSeriesMap().containsKey(this.seriesName)) {
+                    if (chart.getSeriesMap().containsKey(this.seriesName)) chart.removeSeries(this.seriesName);
+                    OHLCSeries series = chart.addSeries(this.seriesName, xCopy, openCopy, highCopy, lowCopy, closeCopy);
+                    // Mum renklerini burada ayarlayabilirsiniz (isteğe bağlı)
+                    // series.setUpColor(XChartSeriesColors.GREEN); 
+                    // series.setDownColor(XChartSeriesColors.RED);
+                    seriesExists = true;
+                } else {
+                    chart.updateOHLCSeries(this.seriesName, xCopy, openCopy, highCopy, lowCopy, closeCopy, null);
+                }
+                applyYAxisPadding(highCopy, lowCopy, (AxesChartStyler) chart.getStyler());
+                if (chartComponentPanel != null) chartComponentPanel.repaint();
+            } catch (Exception e) { 
+                seriesExists = false; // Hata durumunda seriyi tekrar oluşturmaya çalışır
+                System.err.println("Hata (updateOHLCChartSeries - " + this.seriesName + "): " + e.getMessage());
+                // e.printStackTrace();
+            }
+        });
+    }
+    
+    private void applyYAxisPadding(List<Double> highValues, List<Double> lowValues, AxesChartStyler styler) {
+        if (highValues.isEmpty() || lowValues.isEmpty()) {
+            styler.setYAxisMin(-1.0);
+            styler.setYAxisMax(1.0);
             return;
         }
 
-        synchronized (xData) {
-            xData.add(timestamp);
-            yData.add(price);
+        OptionalDouble minOptional = lowValues.stream().mapToDouble(Double::doubleValue).min();
+        OptionalDouble maxOptional = highValues.stream().mapToDouble(Double::doubleValue).max();
 
-            while (xData.size() > MAX_DATA_POINTS) {
-                xData.remove(0);
-                yData.remove(0);
+        if (minOptional.isPresent() && maxOptional.isPresent()) {
+            double actualMinVal = minOptional.getAsDouble();
+            double actualMaxVal = maxOptional.getAsDouble();
+            double dataRange = actualMaxVal - actualMinVal;
+            double midPrice = (actualMinVal + actualMaxVal) / 2.0;
+            if (Double.isNaN(midPrice) || Double.isInfinite(midPrice)) midPrice = 0; // NaN veya Sonsuz ise sıfır ata
+
+            double minDisplaySpan;
+            if (Math.abs(midPrice) < 0.00001) { // Midprice çok küçük veya sıfırsa
+                minDisplaySpan = ABSOLUTE_MIN_Y_AXIS_SPAN;
+            } else {
+                minDisplaySpan = Math.max(Math.abs(midPrice) * MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE, ABSOLUTE_MIN_Y_AXIS_SPAN);
             }
+            
+            double effectiveRange = Math.max(dataRange, minDisplaySpan);
+            if (effectiveRange < 0.00001) effectiveRange = minDisplaySpan; // dataRange çok küçükse minDisplaySpan kullan
 
-            final List<Date> xDataCopy = new ArrayList<>(xData);
-            final List<Double> yDataCopy = new ArrayList<>(yData);
+            double displayMin = midPrice - (effectiveRange / 2.0);
+            double displayMax = midPrice + (effectiveRange / 2.0);
+            
+            double padding = effectiveRange * Y_AXIS_PADDING_PERCENTAGE_OF_EFFECTIVE_RANGE;
 
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                try {
-                    if (!seriesExists) {
-                        // Seri ilk defa oluşturuluyor.
-                        // xDataCopy veya yDataCopy burada boşsa XChart hata verebilir.
-                        // Bu yüzden ilk nokta geldiğinde boş olmamalarını sağlamalıyız.
-                        if (xDataCopy.isEmpty() || yDataCopy.isEmpty()) {
-                            // Henüz grafiğe eklenecek geçerli bir veri noktası yoksa çık.
-                            // Bu genellikle ilk çağrıda olmaz çünkü addDataPoint bir veri ile çağrılır.
-                            return;
-                        }
-                        XYSeries series = xyChart.addSeries(this.seriesName, xDataCopy, yDataCopy);
-                        series.setLineColor(XChartSeriesColors.GREEN);
-                        series.setMarker(SeriesMarkers.NONE);
-                        seriesExists = true;
-                    } else {
-                        // Seri zaten var, güncelle.
-                        xyChart.updateXYSeries(this.seriesName, xDataCopy, yDataCopy, null);
-                    }
+            styler.setYAxisMin(displayMin - padding);
+            styler.setYAxisMax(displayMax + padding);
 
-                    if (chartComponentPanel != null) {
-                        chartComponentPanel.revalidate();
-                        chartComponentPanel.repaint();
-                    }
-                } catch (IllegalArgumentException iae) {
-                    // Genellikle ilk veri noktası eklenirken "Y-Axis data cannot be empty" gibi bir hata alınırsa
-                    // seriesExists false kalır ve bir sonraki veri noktasında seri tekrar eklenmeye çalışılır.
-                    // System.err.println("XChartPanel: Veri eklenirken/seri oluşturulurken hata (muhtemelen ilk nokta): " + iae.getMessage() + " Seri: " + this.seriesName);
-                    seriesExists = false; // Serinin tekrar oluşturulmasını sağlamak için.
-                } catch (Exception e) {
-                    // System.err.println("XChartPanel: Grafik güncellenirken genel hata: " + e.getMessage());
-                }
-            });
+        } else { // Bu durum listeler boş değilse oluşmamalı, yedek olarak kalıyor
+            styler.setYAxisMin(-1.0);
+            styler.setYAxisMax(1.0);
         }
     }
 
     public void clearChart() {
-        synchronized (xData) {
-            xData.clear();
-            yData.clear();
+        clearLocalData();
+        if (chart != null) {
+            if (seriesExists && seriesName != null && !seriesName.equals(initialPanelTitle) && chart.getSeriesMap().containsKey(seriesName)) {
+                 try { chart.removeSeries(seriesName); } catch (Exception e) { /* Hata yoksayılabilir */ }
+            }
+        }
+        seriesExists = false;
+        // Panelin başlığını ilk haline döndürmek için setSeriesNameAndTitle'ı MainController'dan çağırın.
+        // setPanelTitle(this.initialPanelTitle); // Bu doğrudan çağrı yerine MainController yönetsin
+        
+        if (chart != null && chart.getStyler() instanceof AxesChartStyler) { // Styler tipini kontrol et
+            applyYAxisPadding(new ArrayList<>(), new ArrayList<>(), (AxesChartStyler) chart.getStyler());
+        }
 
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                if (seriesExists && this.seriesName != null && xyChart.getSeriesMap().containsKey(this.seriesName)) {
-                    try {
-                        xyChart.removeSeries(this.seriesName);
-                    } catch (Exception e) {
-                        // System.err.println("XChartPanel: Seri kaldırılırken hata: " + e.getMessage());
-                    }
-                }
-                seriesExists = false; // Serinin bir sonraki addDataPoint'te yeniden oluşturulmasını sağlar.
-                
-                // Başlığı başlangıç durumuna getirebiliriz, örneğin "Hisse X" gibi
-                // Bu, MainController tarafından setSeriesNameAndTitle ile tekrar ayarlanacaktır.
-                // if (xyChart != null && this.seriesName != null && this.seriesName.startsWith("Hisse ")) {
-                //     xyChart.setTitle(this.seriesName);
-                // }
-
-                if (chartComponentPanel != null) {
-                    chartComponentPanel.revalidate();
-                    chartComponentPanel.repaint();
-                }
-            });
+        if (chartComponentPanel != null) {
+            chartComponentPanel.revalidate();
+            chartComponentPanel.repaint();
         }
     }
 
-    public XYChart getXyChart() {
-        return xyChart;
-    }
-
-    // Panelin başlığını güncellemek için (MainController'daki setTitle ile karışmasın)
+    // Panelin başlığını güncellemek için (MainController tarafından çağrılır)
     public void setPanelTitle(String title) {
-        if (xyChart != null) {
-            xyChart.setTitle(title);
+        // Bu metot setSeriesNameAndTitle ile birleştirilebilir veya onun tarafından çağrılabilir.
+        // Şimdilik doğrudan chart.setTitle kullanıyoruz, ama seri adını da güncellemek önemli.
+        this.seriesName = (title != null && !title.trim().isEmpty()) ? title : this.initialPanelTitle;
+        if (chart != null) {
+            chart.setTitle(this.seriesName);
+            // Eğer seri adı değişiyorsa ve seri varsa, serinin adını da güncellemek gerekebilir.
+            // XChart'ta var olan bir serinin adını değiştirmek doğrudan desteklenmiyor olabilir.
+            // Genellikle seriyi kaldırıp yeni adla eklemek gerekir. updateOHLCChartSeries bunu yönetiyor.
             if (chartComponentPanel != null) {
                 chartComponentPanel.repaint();
             }

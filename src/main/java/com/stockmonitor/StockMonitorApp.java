@@ -7,7 +7,7 @@ public class StockMonitorApp {
 
     public static void main(String[] args) {
         try {
-            // Daha modern bir görünüm için Nimbus Look and Feel ayarla
+            // Modern bir görünüm ve his için Nimbus L&F ayarla
             for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
                     UIManager.setLookAndFeel(info.getClassName());
@@ -15,16 +15,24 @@ public class StockMonitorApp {
                 }
             }
         } catch (Exception e) {
-            // Nimbus kullanılamazsa, varsayılan L&F kullanılır.
+            // Nimbus kullanılamıyorsa, varsayılan L&F ile devam et
             System.err.println("Nimbus Look and Feel ayarlanamadı: " + e.getMessage());
         }
 
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                MainFrame mainFrame = new MainFrame();
-                mainFrame.initializeController();
-                mainFrame.setVisible(true);
+        // Ana denetleyiciyi (controller) oluştur
+        final MainController controller = new MainController();
+
+        // Uygulama kapatılırken kaynakları serbest bırakmak için ShutdownHook ekle
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutdown Hook tetiklendi.");
+            if (controller != null) {
+                controller.onApplicationExit();
             }
+        }));
+
+        // Swing işlemlerini Event Dispatch Thread (EDT) üzerinde başlat
+        SwingUtilities.invokeLater(() -> {
+            controller.initializeApplication(); // Bu metot MainFrame'i oluşturur ve controller'a bağlar
         });
     }
 } 

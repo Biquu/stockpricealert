@@ -1,137 +1,150 @@
 package com.stockmonitor;
 
-import com.stockmonitor.listeners.AlertListener;
+// import com.stockmonitor.listeners.AlertListener; // Kaldırıldı
 import com.stockmonitor.listeners.GraphDataListener;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 public class StockWatcherThread implements Runnable {
 
-    private final String symbol;
-    private final String thresholdString; // Örn: ">150" veya "<700"
+    private final StockConfig stockConfig; // String symbol ve rawThresholdInput yerine StockConfig
     private final PriceFetcher priceFetcher;
-    private final AlertListener alertListener;
+    private final AlertManager alertManager;
     private final GraphDataListener graphDataListener;
     private volatile boolean running = true;
-    private final long fetchIntervalMillis;
+    private double previousClosePrice = -1; // Önceki kapanış fiyatını saklamak için
+    private boolean firstDataPoint = true;
 
-    private double thresholdValue = -1; // Eşik değeri
-    private String comparisonOperator = ""; // ">", "<", ">=", "<="
+    private static final long FETCH_INTERVAL_SECONDS = 10; // Fiyat çekme aralığı (saniye)
 
-    public StockWatcherThread(String symbol, String thresholdString, PriceFetcher priceFetcher,
-                              AlertListener alertListener, GraphDataListener graphDataListener,
-                              long fetchIntervalSeconds) {
-        this.symbol = symbol;
-        this.thresholdString = thresholdString != null ? thresholdString.trim() : "";
+    // Constructor güncellendi, AlertManager eklendi, GraphType kaldırıldı
+    public StockWatcherThread(StockConfig stockConfig, 
+                              PriceFetcher priceFetcher,
+                              AlertManager alertManager,
+                              GraphDataListener graphDataListener) {
+        this.stockConfig = stockConfig;
         this.priceFetcher = priceFetcher;
-        this.alertListener = alertListener;
+        this.alertManager = alertManager;
         this.graphDataListener = graphDataListener;
-        this.fetchIntervalMillis = fetchIntervalSeconds * 1000;
-        parseThreshold();
-    }
-
-    private void parseThreshold() {
-        if (thresholdString.isEmpty()) {
-            return; // Eşik belirtilmemiş
-        }
-        try {
-            if (thresholdString.startsWith(">")) {
-                comparisonOperator = ">";
-                thresholdValue = Double.parseDouble(thresholdString.substring(1).trim().replace(',', '.'));
-            } else if (thresholdString.startsWith("<")) {
-                comparisonOperator = "<";
-                thresholdValue = Double.parseDouble(thresholdString.substring(1).trim().replace(',', '.'));
-            } else if (thresholdString.startsWith(">=")) {
-                comparisonOperator = ">=";
-                thresholdValue = Double.parseDouble(thresholdString.substring(2).trim().replace(',', '.'));
-            } else if (thresholdString.startsWith("<=")) {
-                comparisonOperator = "<=";
-                thresholdValue = Double.parseDouble(thresholdString.substring(2).trim().replace(',', '.'));
-            } else {
-                // Operatör yoksa, düz sayı olarak kabul et ve "<=" olarak varsay (kullanıcının beklentisine göre)
-                try {
-                    thresholdValue = Double.parseDouble(thresholdString.trim().replace(',', '.'));
-                    comparisonOperator = "<="; // Varsayılan operatör "altına düşerse veya eşitse"
-                    System.out.println("Bilgi: " + symbol + " için eşik '" + thresholdString + "' operatörsüz girildi, '<=' olarak varsayıldı.");
-                } catch (NumberFormatException nfe) {
-                    System.err.println("Geçersiz eşik formatı (operatörsüz de sayı değil): " + thresholdString + " Sembol: " + symbol);
-                    thresholdValue = -1; // Geçersiz kıl
-                    comparisonOperator = "";
-                }
-            }
-        } catch (NumberFormatException e) {
-            System.err.println("Eşik değeri parse edilemedi: " + thresholdString + " Sembol: " + symbol + " Hata: " + e.getMessage());
-            thresholdValue = -1; // Geçersiz kıl
-            comparisonOperator = "";
-        }
     }
 
     @Override
     public void run() {
-        System.out.println(symbol + " için izleme iş parçacığı başlatıldı. Eşik: '" + thresholdString + "', Aralık: " + (fetchIntervalMillis/1000) + " sn.");
+        String symbol = stockConfig.getSymbol();
+        if (symbol == null || symbol.trim().isEmpty()) {
+            System.err.println("StockWatcherThread: İzlenecek sembol belirtilmemiş.");
+            return;
+        }
+        alertManager.logSystemMessage(symbol + " için izleme başladı.");
+
         while (running) {
             try {
                 double currentPrice = priceFetcher.fetchPrice(symbol);
-                LocalDateTime localDateTime = LocalDateTime.now();
+                Date timestamp = new Date();
 
-                System.out.println(String.format("[%s] %s Fiyatı: %.4f", localDateTime.toLocalTime(), symbol, currentPrice));
+                if (currentPrice != -1 && !Double.isNaN(currentPrice)) {
+                    // Anlık fiyattan OHLC verisi türet
+                    double open, high, low, close;
+                    close = currentPrice;
 
-                if (graphDataListener != null) {
-                    Date dateForGraph = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
-                    graphDataListener.onPriceUpdate(symbol, currentPrice, dateForGraph);
+                    if (firstDataPoint) {
+                        open = currentPrice;
+                        high = currentPrice;
+                        low = currentPrice;
+                        firstDataPoint = false;
+                    } else {
+                        open = previousClosePrice;
+                        high = Math.max(open, currentPrice);
+                        low = Math.min(open, currentPrice);
+                    }
+                    
+                    graphDataListener.onOHLCDataUpdate(symbol, timestamp, open, high, low, close);
+                    previousClosePrice = currentPrice; 
+
+                    checkAlerts(symbol, currentPrice);
+                } else {
+                    // alertManager.logAlert(symbol, "API'den fiyat alınamadı veya geçersiz fiyat.");
+                    alertManager.queueAlert(symbol, "API'den fiyat alınamadı veya geçersiz fiyat.");
                 }
 
-                checkThreshold(currentPrice);
-
-                Thread.sleep(fetchIntervalMillis);
-            } catch (IOException e) {
-                System.err.println(symbol + " için fiyat alınırken hata: " + e.getMessage());
-                if (alertListener != null) {
-                    // API hatası için de bir uyarı verilebilir (opsiyonel)
-                    // alertListener.onAlertTriggered(symbol, -1, "API HATASI", "Fiyat alınamadı: " + e.getMessage());
-                }
-                // Hata durumunda biraz daha uzun bekle (API limitlerini aşmamak için)
-                try {
-                    Thread.sleep(Math.min(fetchIntervalMillis * 2, 60000)); // En fazla 60sn
-                } catch (InterruptedException ie) {
-                    running = false; // Kesintiye uğrarsa durdur
-                }
+                TimeUnit.SECONDS.sleep(FETCH_INTERVAL_SECONDS);
             } catch (InterruptedException e) {
-                running = false; // Thread kesintiye uğrarsa döngüyü sonlandır
-                System.out.println(symbol + " için izleme iş parçacığı kesildi.");
+                running = false;
+                Thread.currentThread().interrupt(); 
+                alertManager.logSystemMessage(symbol + " için izleme kesildi (InterruptedException).");
+            } catch (Exception e) {
+                // alertManager.logAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
+                alertManager.queueAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
+                try {
+                    TimeUnit.SECONDS.sleep(FETCH_INTERVAL_SECONDS * 2); 
+                } catch (InterruptedException ie) {
+                    running = false;
+                    Thread.currentThread().interrupt();
+                }
             }
         }
-        System.out.println(symbol + " için izleme iş parçacığı durduruldu.");
+        alertManager.logSystemMessage(symbol + " için izleme durdu.");
+        graphDataListener.clearGraph(symbol); // İzleme durduğunda grafiği temizle
     }
 
-    private void checkThreshold(double currentPrice) {
-        if (thresholdValue == -1 || comparisonOperator.isEmpty() || alertListener == null) {
-            return; // Eşik tanımlı değil veya dinleyici yok
+    private void checkAlerts(String symbol, double currentPrice) {
+        String thresholdConfig = stockConfig.getThreshold();
+        if (thresholdConfig == null || thresholdConfig.trim().isEmpty() || !thresholdConfig.contains("@")) {
+            return; // Eşik yapılandırılmamış veya format hatalı
         }
 
-        boolean alert = false;
-        switch (comparisonOperator) {
-            case ">":
-                if (currentPrice > thresholdValue) alert = true;
+        String[] parts = thresholdConfig.split("@", 2);
+        String condition = parts[0];
+        double targetValue;
+        try {
+            targetValue = Double.parseDouble(parts[1]);
+        } catch (NumberFormatException e) {
+            System.err.println("Hata: " + symbol + " için geçersiz hedef değer formatı: " + parts[1]);
+            return;
+        }
+
+        boolean alertTriggered = false;
+        String alertMessage = "";
+
+        // Önceki fiyatı da kullanarak kesişme kontrolü için (şimdilik basitçe tutuluyor)
+        // Daha karmaşık kesişme senaryoları için önceki fiyatın da takip edilmesi gerekebilir.
+
+        switch (condition) {
+            case "Fiyat > Değer":
+                if (currentPrice > targetValue) {
+                    alertTriggered = true;
+                    alertMessage = String.format("%s fiyatı (%.4f) > hedef (%.4f)", symbol, currentPrice, targetValue);
+                }
                 break;
-            case "<":
-                if (currentPrice < thresholdValue) alert = true;
+            case "Fiyat < Değer":
+                if (currentPrice < targetValue) {
+                    alertTriggered = true;
+                    alertMessage = String.format("%s fiyatı (%.4f) < hedef (%.4f)", symbol, currentPrice, targetValue);
+                }
                 break;
-            case ">=":
-                if (currentPrice >= thresholdValue) alert = true;
+            case "Fiyat Kesişir (Yukarı)": // Basitçe, önceki < hedef && mevcut > hedef
+                // Bu, daha sağlam bir kesişme tespiti için 'previousPrice' gerektirir.
+                // Şimdilik, fiyat hedefin üzerine çıktığında tetiklenecek şekilde basitleştirilmiştir.
+                // Eğer fiyat zaten hedefin üzerindeyse ve bu koşul seçiliyse, her seferinde tetiklenmemesi için ek mantık gerekir.
+                // Şimdilik: Eğer bir önceki değer hedefin altındaysa ve şimdiki değer hedefin üstündeyse (veya eşitse)
+                if (previousClosePrice != -1 && previousClosePrice < targetValue && currentPrice >= targetValue) {
+                    alertTriggered = true;
+                    alertMessage = String.format("%s fiyatı (%.4f) hedefi (%.4f) yukarı yönlü kesti", symbol, currentPrice, targetValue);
+                }
                 break;
-            case "<=":
-                if (currentPrice <= thresholdValue) alert = true;
+            case "Fiyat Kesişir (Aşağı)": // Basitçe, önceki > hedef && mevcut < hedef
+                if (previousClosePrice != -1 && previousClosePrice > targetValue && currentPrice <= targetValue) {
+                    alertTriggered = true;
+                    alertMessage = String.format("%s fiyatı (%.4f) hedefi (%.4f) aşağı yönlü kesti", symbol, currentPrice, targetValue);
+                }
                 break;
         }
 
-        if (alert) {
-            String alertMessage = String.format("ALARM: %s %s %.4f (Mevcut: %.4f)", 
-                                              symbol, thresholdString, thresholdValue, currentPrice);
-            alertListener.onAlertTriggered(symbol, currentPrice, thresholdString, alertMessage);
-            // TODO: Aynı alarmın sürekli tetiklenmemesi için bir mekanizma eklenebilir (örn: bir süre bekleme)
+        if (alertTriggered) {
+            alertManager.queueAlert(symbol, alertMessage);
         }
     }
 
@@ -140,6 +153,6 @@ public class StockWatcherThread implements Runnable {
     }
 
     public String getSymbol() {
-        return symbol;
+        return stockConfig.getSymbol();
     }
 } 
