@@ -14,21 +14,22 @@ public class StockWatcherThread implements Runnable {
     private final PriceFetcher priceFetcher;
     private final AlertManager alertManager;
     private final GraphDataListener graphDataListener;
+    private final long fetchIntervalSeconds; // Statik olmaktan çıkarıldı, final instance değişkeni oldu
     private volatile boolean running = true;
     private double previousClosePrice = -1; // Önceki kapanış fiyatını saklamak için
     private boolean firstDataPoint = true;
 
-    private static final long FETCH_INTERVAL_SECONDS = 10; // Fiyat çekme aralığı (saniye)
-
-    // Constructor güncellendi, AlertManager eklendi, GraphType kaldırıldı
+    // Kurucu metot güncellendi, fetchIntervalSeconds parametresi eklendi
     public StockWatcherThread(StockConfig stockConfig, 
                               PriceFetcher priceFetcher,
                               AlertManager alertManager,
-                              GraphDataListener graphDataListener) {
+                              GraphDataListener graphDataListener,
+                              long fetchIntervalSeconds) { // Yeni parametre
         this.stockConfig = stockConfig;
         this.priceFetcher = priceFetcher;
         this.alertManager = alertManager;
         this.graphDataListener = graphDataListener;
+        this.fetchIntervalSeconds = fetchIntervalSeconds; // Atama yapıldı
     }
 
     @Override
@@ -38,7 +39,7 @@ public class StockWatcherThread implements Runnable {
             System.err.println("StockWatcherThread: İzlenecek sembol belirtilmemiş.");
             return;
         }
-        alertManager.logSystemMessage(symbol + " için izleme başladı.");
+        alertManager.logSystemMessage(symbol + " için " + fetchIntervalSeconds + " saniye aralıklarla izleme başladı.");
 
         while (running) {
             try {
@@ -70,7 +71,7 @@ public class StockWatcherThread implements Runnable {
                     alertManager.queueAlert(symbol, "API'den fiyat alınamadı veya geçersiz fiyat.");
                 }
 
-                TimeUnit.SECONDS.sleep(FETCH_INTERVAL_SECONDS);
+                TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds); // this.fetchIntervalSeconds kullanıldı
             } catch (InterruptedException e) {
                 running = false;
                 Thread.currentThread().interrupt(); 
@@ -79,7 +80,7 @@ public class StockWatcherThread implements Runnable {
                 // alertManager.logAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
                 alertManager.queueAlert(symbol, "Fiyat alınırken bir hata oluştu: " + e.getMessage());
                 try {
-                    TimeUnit.SECONDS.sleep(FETCH_INTERVAL_SECONDS * 2); 
+                    TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds * 2); // Hata durumunda bekleme süresi de dinamik intervale göre
                 } catch (InterruptedException ie) {
                     running = false;
                     Thread.currentThread().interrupt();

@@ -6,7 +6,11 @@ import javax.swing.SwingUtilities;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 // Özel ses çalmak için gerekli importlar (bunlar kalabilir)
 import javax.sound.sampled.AudioInputStream;
@@ -22,8 +26,9 @@ public class AlertManager { // AlertListener implementasyonu kaldırıldı
     private JTextArea alertTextArea; // UI'da alarmların gösterileceği alan
     private final BlockingQueue<String> alertQueue; // Alarmları işlemek için bir kuyruk
     private volatile boolean consumerRunning = true;
-    private Thread alertConsumerThread;
-    private final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private ExecutorService executorService;
+    private Future<?> consumerTaskFuture;
+    private static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String ALARM_SOUND_FILE = "/alarm.wav";
 
     public AlertManager(JTextArea alertTextArea) {
@@ -36,57 +41,88 @@ public class AlertManager { // AlertListener implementasyonu kaldırıldı
         this.alertTextArea = alertTextArea;
     }
 
-    public void startConsumer() {
-        if (alertConsumerThread != null && alertConsumerThread.isAlive()) {
-            return; // Zaten çalışıyor
+    private void ensureExecutorIsReady() {
+        if (executorService == null || executorService.isShutdown() || executorService.isTerminated()) {
+            executorService = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "AlertConsumerThread");
+                t.setDaemon(true); // Ana uygulama kapandığında thread'in de kapanmasını sağlar
+                return t;
+            });
+            System.out.println("AlertManager için yeni ExecutorService oluşturuldu.");
         }
-        consumerRunning = true;
-        alertConsumerThread = new Thread(() -> {
-            while (consumerRunning || !alertQueue.isEmpty()) {
-                try {
-                    String alertMessage = alertQueue.poll(1, java.util.concurrent.TimeUnit.SECONDS);
-                    if (alertMessage != null) {
-                        displayAlert(alertMessage);
+    }
+
+    public void startConsumer() {
+        ensureExecutorIsReady();
+
+        if (consumerTaskFuture != null && !consumerTaskFuture.isDone() && !consumerTaskFuture.isCancelled()) {
+            System.out.println("AlertManager tüketici görevi zaten çalışıyor veya tamamlanmayı bekliyor.");
+            return;
+        }
+
+        consumerRunning = true; // Görevi başlatmadan önce true olarak ayarla
+        consumerTaskFuture = executorService.submit(() -> {
+            System.out.println("AlertManager tüketici görevi başlatıldı.");
+            try {
+                while (consumerRunning || !alertQueue.isEmpty()) {
+                    String alertMessage = null;
+                    try {
+                        alertMessage = alertQueue.poll(1, TimeUnit.SECONDS);
+                        if (alertMessage != null) {
+                            displayAlert(alertMessage);
+                        }
+                        // Eğer consumerRunning false olduysa ve kuyruk boşsa, döngü sonlanacak.
+                    } catch (InterruptedException e) {
+                        if (consumerRunning) {
+                            // Durdurma dışındaki bir nedenle kesinti olduysa logla.
+                            System.err.println("AlertManager tüketici thread'i (poll) beklenmedik şekilde kesintiye uğradı.");
+                            Thread.currentThread().interrupt(); // Kesinti durumunu koru
+                        } else {
+                            // Durdurma sırasında beklenen kesinti.
+                            System.out.println("AlertManager tüketici thread'i (poll) durdurma sırasında kesintiye uğradı.");
+                        }
+                        break; // Kesinti durumunda döngüden çık
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    // consumerRunning false ise ve kuyruk boşsa zaten çıkacak
-                    if (consumerRunning) {
-                         System.err.println("AlertManager tüketici thread'i kesintiye uğradı.");
-                    }
-                    break; // Kesintiye uğrarsa döngüden çık
                 }
+            } finally {
+                System.out.println("AlertManager tüketici görevi sonlandı.");
             }
-            System.out.println("AlertManager tüketici thread'i durdu.");
         });
-        alertConsumerThread.setName("AlertConsumerThread");
-        alertConsumerThread.setDaemon(true); // Ana uygulama kapandığında bu thread'in de kapanmasını sağla
-        alertConsumerThread.start();
     }
 
     public void stopConsumer() {
-        consumerRunning = false;
-        if (alertConsumerThread != null) {
-            alertConsumerThread.interrupt(); // Kuyrukta bekliyorsa kesintiye uğrat
+        consumerRunning = false; // Görevin döngüsünün sonlanması için işaret
+
+        if (consumerTaskFuture != null) {
+            consumerTaskFuture.cancel(true); // Görevi iptal etmeyi dene (çalışıyorsa interrupt gönderir)
+        }
+
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown(); // Yeni görev kabul etme, mevcutları bitirmeye çalış
             try {
-                alertConsumerThread.join(2000); // Thread'in bitmesini 2 saniye bekle
-                if (alertConsumerThread.isAlive()) {
-                    System.err.println("AlertManager tüketici thread'i zamanında durmadı.");
+                if (!executorService.awaitTermination(2, TimeUnit.SECONDS)) {
+                    System.err.println("AlertManager executor'ı zamanında durmadı, shutdownNow deneniyor.");
+                    executorService.shutdownNow(); // Aktif görevleri kesmeyi dene
+                    if (!executorService.awaitTermination(1, TimeUnit.SECONDS)) {
+                        System.err.println("AlertManager executor'ı shutdownNow sonrası da durmadı.");
+                    }
                 }
             } catch (InterruptedException e) {
-                System.err.println("AlertManager tüketici thread'ini durdururken kesinti.");
-                Thread.currentThread().interrupt();
+                System.err.println("AlertManager executor'ını durdururken kesinti.");
+                executorService.shutdownNow(); // Tekrar kesmeyi dene
+                Thread.currentThread().interrupt(); // Ana thread'in kesinti durumunu koru
             }
         }
-        alertQueue.clear(); // Kuyrukta kalanları temizle (opsiyonel)
+        // alertQueue.clear(); // Opsiyonel: Kuyrukta kalanları temizle. Mevcut döngü zaten boşaltmaya çalışır.
+        System.out.println("AlertManager stopConsumer tamamlandı.");
     }
 
     // StockWatcherThread tarafından çağrılacak basitleştirilmiş metot
     public void queueAlert(String symbol, String message) {
         if (symbol == null || message == null) return;
-        String fullMessage = String.format("[%s] ALARM (%s): %s", 
-                                         LocalDateTime.now().format(dtf), 
-                                         symbol, 
+        String fullMessage = String.format("[%s] ALARM (%s): %s",
+                                         LocalDateTime.now().format(DTF), // DTF kullanımı
+                                         symbol,
                                          message);
         try {
             alertQueue.put(fullMessage);
@@ -99,10 +135,20 @@ public class AlertManager { // AlertListener implementasyonu kaldırıldı
     // Sistem mesajlarını doğrudan UI'a yazdırmak için (örn: izleme başladı/durdu)
     public void logSystemMessage(String message) {
         if (message == null) return;
-        String fullMessage = String.format("[%s] SİSTEM: %s", 
-                                           LocalDateTime.now().format(dtf), 
+        String fullMessage = String.format("[%s] SİSTEM: %s",
+                                           LocalDateTime.now().format(DTF), // DTF kullanımı
                                            message);
-        displayAlert(fullMessage);
+        // displayAlert(fullMessage); // Eski durumda ses çalıyordu.
+
+        // Sistem mesajını ses çalmadan doğrudan UI veya konsola yazdır:
+        if (alertTextArea != null) {
+            SwingUtilities.invokeLater(() -> {
+                alertTextArea.append(fullMessage + "\n");
+                alertTextArea.setCaretPosition(alertTextArea.getDocument().getLength());
+            });
+        } else {
+            System.out.println("Sistem Mesajı (AlertTextArea null): " + fullMessage);
+        }
     }
 
     // Alarmları UI'da gösterir
@@ -112,13 +158,18 @@ public class AlertManager { // AlertListener implementasyonu kaldırıldı
                 alertTextArea.append(message + "\n");
                 // Otomatik olarak en sona kaydır (opsiyonel)
                 alertTextArea.setCaretPosition(alertTextArea.getDocument().getLength());
+                playSound(ALARM_SOUND_FILE); // Ses çalma eklendi
             });
         } else {
             System.out.println("Mesaj (AlertTextArea null): " + message); // Fallback to console
+            playSound(ALARM_SOUND_FILE); // Konsola yazdırılırken de ses çal (opsiyonel)
         }
     }
 
     private void playSound(String soundFilePath) {
+        if (!consumerRunning) { // Eğer tüketici çalışmıyorsa (izleme durduysa) ses çalma
+            return;
+        }
         try {
             URL soundURL = AlertManager.class.getResource(soundFilePath);
             if (soundURL == null) {

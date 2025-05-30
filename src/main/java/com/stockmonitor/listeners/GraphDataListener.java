@@ -42,4 +42,4 @@ public interface GraphDataListener {
 
     // Mum grafiği verileri için bir metot eklenebilir, ancak şimdilik anlık fiyatla devam ediyoruz.
     // void onCandleDataUpdate(String symbol, List<CandleData> candles);
-} 
+}

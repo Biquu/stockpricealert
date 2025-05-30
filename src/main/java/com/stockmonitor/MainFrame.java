@@ -29,7 +29,7 @@ public class MainFrame extends JFrame {
 
     private static final int NUM_STOCK_SLOTS = 4; // İzlenecek maksimum hisse senedi sayısı
 
-    private final String[] availableSymbols = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", 
+    private final String[] availableSymbols = {"", "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", 
                                                "BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT", 
                                                "BINANCE:ADAUSDT", "BINANCE:XRPUSDT", "BINANCE:DOGEUSDT",
                                                "COINBASE:BTC-USD", "COINBASE:ETH-USD",
@@ -102,12 +102,22 @@ public class MainFrame extends JFrame {
             gbc.gridx = 0; gbc.weightx = 0.30;
             JComboBox<String> stockCombo = new JComboBox<>(availableSymbols);
             stockCombo.setEditable(true); 
-            stockCombo.setSelectedIndex(-1); // Başlangıçta hiçbir şey seçili olmasın
+            stockCombo.setSelectedIndex(0); // Başlangıçta boş seçenek seçili olsun
             final int stockIndex = i; // Lambda için final veya effectively final
             stockCombo.addActionListener(_e -> { // Lambda parametresi _e olarak değiştirildi (kullanılmıyor)
                 String selectedSymbol = (String) stockCombo.getSelectedItem();
-                if (controller != null && selectedSymbol != null && !selectedSymbol.trim().isEmpty()) {
-                    controller.fetchAndDisplayInitialPrice(stockIndex, selectedSymbol);
+                if (controller != null) {
+                    if (selectedSymbol != null && !selectedSymbol.trim().isEmpty()) {
+                        controller.fetchAndDisplayInitialPrice(stockIndex, selectedSymbol);
+                    } else {
+                        // Sembol boş seçildiğinde UI'ı temizle
+                        clearInitialPriceDisplay(stockIndex);
+                        if (chartPanels.get(stockIndex) != null) {
+                            chartPanels.get(stockIndex).clearChart();
+                            // Grafik başlığını da ilk haline döndürelim
+                            chartPanels.get(stockIndex).setPanelTitle("Hisse/Kripto " + (stockIndex + 1));
+                        }
+                    }
                 }
             });
             stockSelectionCombos.add(stockCombo);

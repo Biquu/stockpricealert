@@ -30,6 +30,7 @@ public class MainController {
     // Finnhub ücretsiz API limiti dakikada ~60 istektir.
     // 2 hisse/kripto izlerken her birini 3 saniyede bir çekmek dakikada 2*20 = 40 istek yapar.
     private static final int MAX_DISPLAY_CHARTS = 4; // 2'den 4'e çıkarıldı
+    private static final int MAX_API_REQUESTS_PER_MINUTE = 58; // Güvenlik payı ile Finnhub limiti
 
     public MainController() {
         // priceFetcher initialize edilecek.
@@ -85,6 +86,30 @@ public class MainController {
         activeWatchers.clear();
         graphUpdater.unregisterAllChartPanels(); // Sadece sembol-panel eşleşmelerini kaldır
 
+        int numberOfActiveSymbols = configs.size();
+        long fetchIntervalSeconds;
+
+        if (numberOfActiveSymbols == 1) {
+            fetchIntervalSeconds = 5; // Tek sembol için 5 saniye
+        } else if (numberOfActiveSymbols == 2) {
+            fetchIntervalSeconds = 3; // 2 sembol için 3 saniye (60 / (2*3) = 10 istek/sembol/dk -> toplam 20*2=40)
+        } else if (numberOfActiveSymbols == 3) {
+            fetchIntervalSeconds = 4; // 3 sembol için 4 saniye (60 / (3*4) = 5 istek/sembol/dk -> toplam 15*3=45)
+        } else if (numberOfActiveSymbols >= 4) {
+            fetchIntervalSeconds = 5; // 4 ve üzeri sembol için 5 saniye (60 / (4*5) = 3 istek/sembol/dk -> toplam 12*4=48)
+        } else { // Bu durum configs.isEmpty() ile yukarıda yakalanmalı ama yedek olarak
+            fetchIntervalSeconds = 10; // Varsayılan
+        }
+        
+        // API limitini aşmamak için minimum intervali de kontrol edebiliriz.
+        // Örneğin, (60 saniye / (MAX_API_REQUESTS_PER_MINUTE / numberOfActiveSymbols) )
+        // Eğer numberOfActiveSymbols > 0 ise: Her bir sembol için dakikada yapılabilecek maksimum istek sayısı = MAX_API_REQUESTS_PER_MINUTE / numberOfActiveSymbols
+        // Bu durumda saniye cinsinden minimum interval = 60 / (MAX_API_REQUESTS_PER_MINUTE / numberOfActiveSymbols)
+        // fetchIntervalSeconds = Math.max(fetchIntervalSeconds, calculatedMinInterval); şeklinde bir kontrol eklenebilir.
+        // Şimdilik yukarıdaki manuel ayarlar yeterli olacaktır.
+
+        System.out.println("[MainController] Aktif sembol sayısı: " + numberOfActiveSymbols + ", Veri çekme aralığı: " + fetchIntervalSeconds + " saniye olarak ayarlandı.");
+
         int chartIndex = 0;
         for (StockConfig config : configs) {
             final String currentSymbol = config.getSymbol();
@@ -110,7 +135,8 @@ public class MainController {
                     config, 
                     priceFetcher,
                     alertManager,  
-                    graphUpdater 
+                    graphUpdater,
+                    fetchIntervalSeconds // Hesaplanan interval iletiliyor
                 );
                 activeWatchers.put(currentSymbol, watcher);
                 executorService.submit(watcher); 
@@ -118,7 +144,7 @@ public class MainController {
             }
         }
         mainFrame.updateButtonStates(true); 
-        alertManager.logSystemMessage("İzleme tüm seçili semboller için başlatıldı.");
+        alertManager.logSystemMessage("İzleme tüm seçili semboller için başlatıldı (" + fetchIntervalSeconds + "sn aralıklarla).");
     }
 
     public void stopMonitoring() {

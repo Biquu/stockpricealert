@@ -52,7 +52,7 @@ echo Uygulama baslatiliyor...
 echo Konsol cikislari icin bu pencereyi acik tutun.
 echo.
 REM lib klasorundeki JAR dosyalarinin adlarini ve surumlerini kontrol edin ve gerekiyorsa guncelleyin.
-java -cp "bin;lib/xchart-3.8.8.jar;lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
+java -cp ".;bin;lib/xchart-3.8.8.jar;lib/json-20250517.jar" com.stockmonitor.StockMonitorApp
 
 :end
 echo.

@@ -104,26 +104,4 @@ public class GraphUpdater implements GraphDataListener {
             });
         }
     }
-
-    // displayHistoricalCandles metodu kaldırıldı.
-    // updateGraphData metodu da aslında onOHLCDataUpdate ile aynı işi yapıyor,
-    // ve GraphDataListener arayüzünden gelen onOHLCDataUpdate kullanıldığı için kaldırılabilir.
-    // Ancak StockWatcherThread doğrudan updateGraphData'yı çağırıyorsa kalmalı.
-    // Kontrol: StockWatcherThread artık doğrudan GraphUpdater objesine sahip ve onOHLCDataUpdate'i çağırıyor olmalı.
-    // Bu durumda updateGraphData gereksiz.
-
-    /* 
-    // Anlık (veya kısa periyotlarla türetilmiş) OHLC verilerini güncellemek için metot
-    // Bu metot onOHLCDataUpdate ile aynı işi yapıyor ve GraphDataListener üzerinden geldiği için gereksiz.
-    public void updateGraphData(String symbol, Date timestamp, double open, double high, double low, double close) {
-        XChartPanel chartPanel = chartPanelsMap.get(symbol.toUpperCase());
-        if (chartPanel != null) {
-            SwingUtilities.invokeLater(() -> {
-                chartPanel.addOHLCDataPoint(timestamp, open, high, low, close);
-            });
-        } else {
-            System.err.println("GraphUpdater: " + symbol + " için kayıtlı XChartPanel bulunamadı (updateGraphData).");
-        }
-    }
-    */
-} 
+}

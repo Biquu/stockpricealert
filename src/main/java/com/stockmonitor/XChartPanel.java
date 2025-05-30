@@ -30,7 +30,7 @@ public class XChartPanel extends JPanel {
     private final List<Double> closeDataCandle;
 
     // MAX_DATA_POINTS_CANDLE, son 1 saatlik 1dk'lık mumları (60 adet) + anlık akacak verileri (örn. 60 adet daha) alacak şekilde ayarlandı
-    private static final int MAX_DATA_POINTS_CANDLE = 60; 
+    private static final int MAX_DATA_POINTS_CANDLE = 300; 
 
     // Y Ekseni Dinamik Aralık Ayarları için Yeni Sabitler
     private static final double MIN_Y_AXIS_SPAN_PERCENTAGE_OF_MIDPRICE = 0.001; // %2.5'ten %0.1'e düşürüldü (0.025 -> 0.001)
