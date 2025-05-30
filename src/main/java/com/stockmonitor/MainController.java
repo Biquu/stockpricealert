@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-// import javax.swing.JLabel; // Artık doğrudan kullanılmıyor olabilir, kontrol edilecek.
+// import javax.swing.JLabel; // Kaldırıldı.
 
 public class MainController {
 
@@ -214,14 +214,5 @@ public class MainController {
                 }
             }
         });
-    }
-    
-    // ExecutorService'leri düzgün kapatmak için onApplicationExit'i güncelle
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        if (initialPriceExecutorService != null && !initialPriceExecutorService.isShutdown()) {
-            initialPriceExecutorService.shutdownNow();
-        }
     }
 } 
