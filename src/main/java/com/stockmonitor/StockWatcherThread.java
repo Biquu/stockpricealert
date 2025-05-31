@@ -46,10 +46,10 @@ public class StockWatcherThread implements Runnable {
 
         while (running) {
             try {
-                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Fetching price..."); // Can be too verbose
+                System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Fetching price..."); // Can be too verbose
                 double currentPrice = priceFetcher.fetchPrice(symbol);
                 Date timestamp = new Date();
-                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Price fetched: " + currentPrice);
+                System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Price fetched: " + currentPrice);
 
                 if (currentPrice != -1 && !Double.isNaN(currentPrice)) {
                     // Derive OHLC data from the current price
@@ -67,16 +67,16 @@ public class StockWatcherThread implements Runnable {
                         low = Math.min(open, currentPrice);
                     }
                     
-                    // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sending OHLC data to listener.");
+                    System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sending OHLC data to listener.");
                     graphDataListener.onOHLCDataUpdate(symbol, timestamp, open, high, low, close);
                     previousClosePrice = currentPrice; 
 
                     checkAlerts(symbol, currentPrice);
                 } else {
-                    // System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Could not fetch price or invalid price from API.");
+                    System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Could not fetch price or invalid price from API.");
                     alertManager.queueAlert(symbol, "Could not fetch price or invalid price from API for " + symbol + ".");
                 }
-                // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sleeping for " + this.fetchIntervalSeconds + " seconds...");
+                System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Sleeping for " + this.fetchIntervalSeconds + " seconds...");
                 TimeUnit.SECONDS.sleep(this.fetchIntervalSeconds); // Using this.fetchIntervalSeconds
             } catch (InterruptedException e) {
                 running = false; // Ensure loop termination
@@ -101,8 +101,11 @@ public class StockWatcherThread implements Runnable {
     }
 
     private void checkAlerts(String symbol, double currentPrice) {
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Entering checkAlerts. Current price: " + currentPrice);
         String thresholdConfig = stockConfig.getThreshold();
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Threshold config: " + thresholdConfig);
         if (thresholdConfig == null || thresholdConfig.trim().isEmpty() || !thresholdConfig.contains("@")) {
+            System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Threshold not configured or format incorrect. Returning.");
             return; // Threshold not configured or format is incorrect
         }
 
@@ -113,8 +116,10 @@ public class StockWatcherThread implements Runnable {
             targetValue = Double.parseDouble(parts[1]);
         } catch (NumberFormatException e) {
             System.err.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] Error: Invalid target value format for " + symbol + ": " + parts[1]);
+            System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Invalid target value. Returning.");
             return;
         }
+        System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Condition: '" + condition + "', Target Value: " + targetValue);
 
         boolean alertTriggered = false;
         String alertMessage = "";
@@ -122,26 +127,26 @@ public class StockWatcherThread implements Runnable {
         // For intersection control using the previous price (kept simple for now)
         // More complex intersection scenarios might require tracking the previous price.
 
-        switch (condition) {
-            case "Fiyat > Değer": // Price > Value
+        switch (condition.trim()) {
+            case "Price > Value": // Price > Value
                 if (currentPrice > targetValue) {
                     alertTriggered = true;
                     alertMessage = String.format("%s price (%.4f) > target (%.4f)", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat < Değer": // Price < Value
+            case "Price < Value": // Price < Value
                 if (currentPrice < targetValue) {
                     alertTriggered = true;
                     alertMessage = String.format("%s price (%.4f) < target (%.4f)", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat Kesişir (Yukarı)": // Price Crosses (Up)
+            case "Price Crosses (Up)": // Price Crosses (Up)
                 if (previousClosePrice != -1 && previousClosePrice < targetValue && currentPrice >= targetValue) {
                     alertTriggered = true;
                     alertMessage = String.format("%s price (%.4f) crossed target (%.4f) upwards", symbol, currentPrice, targetValue);
                 }
                 break;
-            case "Fiyat Kesişir (Aşağı)": // Price Crosses (Down)
+            case "Price Crosses (Down)": // Price Crosses (Down)
                 if (previousClosePrice != -1 && previousClosePrice > targetValue && currentPrice <= targetValue) {
                     alertTriggered = true;
                     alertMessage = String.format("%s price (%.4f) crossed target (%.4f) downwards", symbol, currentPrice, targetValue);
@@ -150,7 +155,7 @@ public class StockWatcherThread implements Runnable {
         }
 
         if (alertTriggered) {
-            // System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Alert triggered: " + alertMessage);
+            System.out.println("[StockWatcherThread] [Thread: " + Thread.currentThread().getName() + "] " + symbol + ": Alert triggered: " + alertMessage);
             alertManager.queueAlert(symbol, alertMessage);
         }
     }

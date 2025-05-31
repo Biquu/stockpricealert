@@ -71,7 +71,7 @@ public class AlertManager { // AlertListener implementation removed
                     try {
                         alertMessage = alertQueue.poll(1, TimeUnit.SECONDS);
                         if (alertMessage != null) {
-                            // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Dequeued alert: " + alertMessage);
+                            System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Dequeued alert: " + alertMessage);
                             displayAlert(alertMessage);
                         }
                         // If consumerRunning becomes false and the queue is empty, the loop will terminate.
@@ -130,7 +130,7 @@ public class AlertManager { // AlertListener implementation removed
                                          LocalDateTime.now().format(DTF), // Use DTF
                                          symbol,
                                          message);
-        // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Queuing alert: " + fullMessage);
+        System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Queuing alert: " + fullMessage);
         try {
             alertQueue.put(fullMessage);
         } catch (InterruptedException e) {
@@ -150,7 +150,7 @@ public class AlertManager { // AlertListener implementation removed
         // Print system message directly to UI or console without playing sound:
         if (alertTextArea != null) {
             SwingUtilities.invokeLater(() -> {
-                // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Logging system message to UI: " + fullMessage);
+                System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Logging system message to UI: " + fullMessage);
                 alertTextArea.append(fullMessage + "\n");
                 alertTextArea.setCaretPosition(alertTextArea.getDocument().getLength());
             });
@@ -163,7 +163,7 @@ public class AlertManager { // AlertListener implementation removed
     private void displayAlert(String message) {
         if (alertTextArea != null) {
             SwingUtilities.invokeLater(() -> {
-                // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Displaying alert to UI: " + message);
+                System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Displaying alert to UI: " + message);
                 alertTextArea.append(message + "\n");
                 // Automatically scroll to the end (optional)
                 alertTextArea.setCaretPosition(alertTextArea.getDocument().getLength());
@@ -177,10 +177,10 @@ public class AlertManager { // AlertListener implementation removed
 
     private void playSound(String soundFilePath) {
         if (!consumerRunning) { // If consumer is not running (monitoring stopped), don't play sound
-            // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Consumer not running, skipping sound for: " + soundFilePath);
+            System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Consumer not running, skipping sound for: " + soundFilePath);
             return;
         }
-        // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Attempting to play sound: " + soundFilePath);
+        System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Attempting to play sound: " + soundFilePath);
         try {
             URL soundURL = AlertManager.class.getResource(soundFilePath);
             if (soundURL == null) {
@@ -192,7 +192,7 @@ public class AlertManager { // AlertListener implementation removed
             Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
             clip.start();
-            // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Sound started: " + soundFilePath);
+            System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Sound started: " + soundFilePath);
         } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
             System.err.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Error playing sound file " + soundFilePath + ": " + e.getMessage());
             java.awt.Toolkit.getDefaultToolkit().beep(); // Fallback beep
