@@ -11,6 +11,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.swing.JOptionPane;
 
 // Imports for playing custom sound (can remain)
 import javax.sound.sampled.AudioInputStream;
@@ -30,6 +33,8 @@ public class AlertManager { // AlertListener implementation removed
     private Future<?> consumerTaskFuture;
     private static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final String ALARM_SOUND_FILE = "/alarm.wav";
+    private final Map<String, Long> lastPlayedSoundTimes = new ConcurrentHashMap<>();
+    private static final long SOUND_COOLDOWN_MS = 30000; // 30 seconds cooldown
 
     public AlertManager(JTextArea alertTextArea) {
         this.alertTextArea = alertTextArea;
@@ -159,23 +164,86 @@ public class AlertManager { // AlertListener implementation removed
         }
     }
 
+    // Extracts a key from the alert message to identify the alert type for cooldown
+    private String getAlertKey(String message) {
+        if (message == null) {
+            return "";
+        }
+        // Example message: "[04:02:43] ALERT (COINBASE:BTC-USD): COINBASE:BTC-USD price (103948.9600) < target (103960.8900)"
+        // We want a key like "COINBASE:BTC-USD: price < target"
+        try {
+            String noTimestamp = message.substring(message.indexOf("] ") + 2); // Remove timestamp
+            if (noTimestamp.startsWith("ALERT (")) {
+                String symbolPart = noTimestamp.substring(noTimestamp.indexOf("(") + 1, noTimestamp.indexOf(")"));
+                String detailsPart = noTimestamp.substring(noTimestamp.indexOf("): ") + 3);
+                // Further simplify detailsPart to get the core condition
+                // e.g., "COINBASE:BTC-USD price (103948.9600) < target (103960.8900)" -> "price < target"
+                // This is a bit naive, might need more robust parsing based on actual message formats
+                if (detailsPart.contains("price (") && detailsPart.contains(") < target (")) {
+                    return symbolPart + ": price < target";
+                } else if (detailsPart.contains("price (") && detailsPart.contains(") > target (")) {
+                    return symbolPart + ": price > target";
+                } else if (detailsPart.contains("price (") && detailsPart.contains(") crossed target (") && detailsPart.contains(" upwards")) {
+                    return symbolPart + ": price crossed target upwards";
+                } else if (detailsPart.contains("price (") && detailsPart.contains(") crossed target (") && detailsPart.contains(" downwards")) {
+                    return symbolPart + ": price crossed target downwards";
+                }
+                // Fallback to a more generic key if parsing fails
+                return symbolPart + ":" + detailsPart.split(" ")[1] + detailsPart.split(" ")[2];
+            }
+        } catch (Exception e) {
+            // If parsing fails, use a less specific part of the message or the whole message (minus timestamp)
+            System.err.println("[AlertManager] Error parsing alert key from message: '" + message + "'. Using broader key. Error: " + e.getMessage());
+            if (message.contains("ALERT (")) {
+                 return message.substring(message.indexOf("ALERT ("));
+            }
+        }
+        return message; // Fallback to full message if specific parsing fails
+    }
+
+    private boolean canPlaySound(String alertMessage) {
+        String alertKey = getAlertKey(alertMessage);
+        long currentTime = System.currentTimeMillis();
+        Long lastPlayedTime = lastPlayedSoundTimes.get(alertKey);
+
+        if (lastPlayedTime == null || (currentTime - lastPlayedTime) > SOUND_COOLDOWN_MS) {
+            System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Cooldown check PASSED for alert key: '" + alertKey + "'. Sound can be played.");
+            lastPlayedSoundTimes.put(alertKey, currentTime);
+            return true;
+        }
+        System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Cooldown check FAILED for alert key: '" + alertKey + "'. Sound was played recently. Skipping.");
+        return false;
+    }
+
     // Displays alerts in the UI
     private void displayAlert(String message) {
         if (alertTextArea != null) {
             SwingUtilities.invokeLater(() -> {
                 System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Displaying alert to UI: " + message);
                 alertTextArea.append(message + "\n");
-                // Automatically scroll to the end (optional)
                 alertTextArea.setCaretPosition(alertTextArea.getDocument().getLength());
-                playSound(ALARM_SOUND_FILE); // Sound playing added
+
+                if (canPlaySound(message)) {
+                    // Show JOptionPane dialog only when sound is also played
+                    java.awt.Component parentComponent = (alertTextArea != null && alertTextArea.isVisible()) ? SwingUtilities.getWindowAncestor(alertTextArea) : null;
+                    JOptionPane.showMessageDialog(parentComponent, 
+                                                  message, 
+                                                  "Stock Monitor Alert!", 
+                                                  JOptionPane.WARNING_MESSAGE);
+                    playSoundInternal(ALARM_SOUND_FILE); 
+                }
             });
-        } else {
-            System.out.println("Message (AlertTextArea null): " + message); // Fallback to console
-            playSound(ALARM_SOUND_FILE); // Also play sound when printing to console (optional)
+        } else { // Fallback for when UI is not available (e.g. testing or headless mode)
+            System.out.println("Message (AlertTextArea null): " + message); 
+            if (canPlaySound(message)) {
+                 // Optionally, decide if JOptionPane makes sense in headless/no-UI mode
+                 // For now, skipping JOptionPane if alertTextArea is null, but sound still plays.
+                 playSoundInternal(ALARM_SOUND_FILE); 
+            }
         }
     }
 
-    private void playSound(String soundFilePath) {
+    private void playSoundInternal(String soundFilePath) { // Renamed from playSound
         if (!consumerRunning) { // If consumer is not running (monitoring stopped), don't play sound
             System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Consumer not running, skipping sound for: " + soundFilePath);
             return;
@@ -191,6 +259,15 @@ public class AlertManager { // AlertListener implementation removed
             AudioInputStream audioIn = AudioSystem.getAudioInputStream(soundURL);
             Clip clip = AudioSystem.getClip();
             clip.open(audioIn);
+            // Add a listener to close the clip after it finishes playing
+            // This is important to release system resources, especially if sounds are played frequently.
+            clip.addLineListener(event -> {
+                if (event.getType() == javax.sound.sampled.LineEvent.Type.STOP) {
+                    Clip c = (Clip) event.getSource();
+                    c.close();
+                    // System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Sound clip closed: " + soundFilePath);
+                }
+            });
             clip.start();
             System.out.println("[AlertManager] [Thread: " + Thread.currentThread().getName() + "] Sound started: " + soundFilePath);
         } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
